@@ -10,6 +10,7 @@ import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import entropy
+from tqdm import tqdm
 
 
 # %%
@@ -82,22 +83,21 @@ class Progress:
         self.labels = np.array([])
         self.max_probs = np.array([])
         self.confidences = np.array([])
+        self.dropout_variances = np.array([])
+
+    def update(self, preds, labels, probs):
+        self.predictions = np.append(
+            self.predictions, preds.numpy())
+        self.labels = np.append(
+            self.labels, labels.data.numpy())
+        self.max_probs = np.append(self.max_probs, torch.max(
+            probs, dim=1)[0].detach().numpy())
+        self.confidences = np.append(self.confidences,
+                                     1 - normalized_entropy(probs.detach().numpy(), axis=1))
 
     def __str__(self) -> str:
         return f"Predictions: {self.predictions}\nLabels: {self.labels}\nMax probs: {self.max_probs}\n Confidences: {self.confidences}"
 
-
-# %%
-def update_progress(progress, preds, labels, probs):
-    progress.predictions = np.append(
-        progress.predictions, preds.numpy())
-    progress.labels = np.append(
-        progress.labels, labels.data.numpy())
-    progress.max_probs = np.append(progress.max_probs, torch.max(
-        probs, dim=1)[0].detach().numpy())
-    progress.confidences = np.append(progress.confidences,
-                                     1 - normalized_entropy(probs.detach().numpy(), axis=1))
-    return progress
 
 # %%
 
@@ -136,8 +136,8 @@ def train_model(model, num_epochs, optimizer, criterion):
                     running_entropy += np.sum(1 -
                                               normalized_entropy(probs.detach().numpy(), axis=1))
                     running_maxes += torch.sum(torch.max(probs, dim=1)[0])
-                    current_holder = update_progress(
-                        current_holder, preds, labels, probs)
+                    current_holder = current_holder.update(
+                        preds, labels, probs)
                     if phase == 'train':
                         loss.backward()
                         optimizer.step()
@@ -152,7 +152,7 @@ def train_model(model, num_epochs, optimizer, criterion):
 
 
 # %%
-model = NeuralNetwork(p_dropout=0).to(device)
+model = NeuralNetwork(p_dropout=0.5).to(device)
 print(model)
 optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 criterion = nn.CrossEntropyLoss()
@@ -179,26 +179,30 @@ print(
     f"Prob: {np.mean(val_last_progress.max_probs[~correct])}")
 
 # %%
-batch_size = 10
-softmax = nn.Softmax(dim=1)
 
-bin_loader = torch.utils.data.DataLoader(data_test,
-                                         batch_size=batch_size,
-                                         shuffle=False)
-accs = []
-entropies = []
-maxes = []
-for inputs, labels in bin_loader:
-    model.eval()
-    with torch.no_grad():
-        outputs = model(inputs)
-        probs = softmax(outputs)
-        _, preds = torch.max(outputs, 1)
-        accs.append(torch.sum(preds == labels.data) / batch_size)
-        entropies.append(
-            np.sum(1-normalized_entropy(probs.detach().numpy(), axis=1)) / batch_size)
-        maxes.append(torch.sum(torch.max(probs, dim=1)[0]) / batch_size)
+mc_outputs = []
 
+
+def run_validation(model, data_loader):
+    softmax = nn.Softmax(dim=1)
+    test_progress = Progress()
+    for i, (inputs, labels) in enumerate(tqdm(data_loader)):
+        model.eval()
+        with torch.no_grad():
+            outputs = model(inputs)
+            probs = softmax(outputs)
+            _, preds = torch.max(outputs, 1)
+            mc_output = mc_dropout(model, inputs).detach().numpy()
+            mc_outputs.append(mc_output)
+            test_progress.dropout_variances = np.append(
+                test_progress.dropout_variances, np.var(mc_output, axis=0))
+            test_progress.update(preds, labels, probs)
+
+    return test_progress
+
+
+# %%
+val_progress = run_validation(model, data_loaders["val"])
 
 # %%
 
