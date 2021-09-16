@@ -121,7 +121,7 @@ def train_model(model, num_epochs, optimizer, criterion):
             running_corrects = 0
             running_entropy = 0.0
             running_maxes = 0.0
-            for inputs, labels in data_loaders[phase]:
+            for inputs, labels in tqdm(data_loaders[phase]):
                 current_holder = precision_holder[epoch][phase]
                 optimizer.zero_grad()
                 # track history if only in train
@@ -160,42 +160,42 @@ progress = train_model(model, 5, optimizer, criterion)
 
 
 # %%
-val_last_progress = progress[-1]["val"]
-correct = val_last_progress.predictions == val_last_progress.labels
-plt.figure(figsize=(15, 5))
-plt.violinplot([val_last_progress.confidences, val_last_progress.max_probs,
-                val_last_progress.confidences[correct], val_last_progress.max_probs[correct],
-                val_last_progress.confidences[~correct], val_last_progress.max_probs[~correct]])
+def plot_uncertainties(progress):
+    correct = progress.predictions == progress.labels
+    plt.figure(figsize=(15, 5))
+    plt.violinplot([progress.confidences, progress.max_probs,
+                    progress.confidences[correct], progress.max_probs[correct],
+                    progress.confidences[~correct], progress.max_probs[~correct]])
+
+    print(
+        f"All predictions mean confidence: {np.mean(progress.confidences)}, "
+        f"Prob: {np.mean(progress.max_probs)}, "
+        f"Var: {progress.dropout_variances.mean()}")
+    print(
+        f"Correct predictions mean confidence: {np.mean(progress.confidences[correct])}, "
+        f"Prob: {np.mean(progress.max_probs[correct])}, "
+        f"Var: {progress.dropout_variances[correct].mean()}")
+    print(
+        f"Incorrect predictions mean confidence: {np.mean(progress.confidences[~correct])}, "
+        f"Prob: {np.mean(progress.max_probs[~correct])}, "
+        f"Var: {progress.dropout_variances[~correct].mean()}")
 
 # %%
-print(
-    f"All predictions mean confidence: {np.mean(val_last_progress.confidences)}, "
-    f"Prob: {np.mean(val_last_progress.max_probs)}")
-print(
-    f"Correct predictions mean confidence: {np.mean(val_last_progress.confidences[correct])}, "
-    f"Prob: {np.mean(val_last_progress.max_probs[correct])}")
-print(
-    f"Incorrect predictions mean confidence: {np.mean(val_last_progress.confidences[~correct])}, "
-    f"Prob: {np.mean(val_last_progress.max_probs[~correct])}")
-
-# %%
-
-mc_outputs = []
 
 
 def run_validation(model, data_loader):
     softmax = nn.Softmax(dim=1)
     test_progress = Progress()
-    for i, (inputs, labels) in enumerate(tqdm(data_loader)):
+    for inputs, labels in tqdm(data_loader):
         model.eval()
         with torch.no_grad():
             outputs = model(inputs)
             probs = softmax(outputs)
             _, preds = torch.max(outputs, 1)
             mc_output = mc_dropout(model, inputs).detach().numpy()
-            mc_outputs.append(mc_output)
+            mc_var = mc_output.var(axis=0).sum(axis=-1)
             test_progress.dropout_variances = np.append(
-                test_progress.dropout_variances, np.var(mc_output, axis=0))
+                test_progress.dropout_variances, mc_var)
             test_progress.update(preds, labels, probs)
 
     return test_progress
@@ -203,6 +203,9 @@ def run_validation(model, data_loader):
 
 # %%
 val_progress = run_validation(model, data_loaders["val"])
+
+# %%
+plot_uncertainties(val_progress)
 
 # %%
 
