@@ -121,7 +121,8 @@ def train_model(model, num_epochs, optimizer, criterion):
             running_corrects = 0
             running_entropy = 0.0
             running_maxes = 0.0
-            for inputs, labels in tqdm(data_loaders[phase]):
+            progress_bar = tqdm(data_loaders[phase])
+            for inputs, labels in progress_bar:
                 current_holder = precision_holder[epoch][phase]
                 optimizer.zero_grad()
                 # track history if only in train
@@ -146,8 +147,9 @@ def train_model(model, num_epochs, optimizer, criterion):
             epoch_acc = running_corrects.double() / dataset_sizes[phase]
             epoch_entropy = running_entropy / dataset_sizes[phase]
             epoch_avg_max = running_maxes / dataset_sizes[phase]
-            print('{} Loss: {:.4f} Acc: {:.4f} Avg. conf: {:.4f} Avg. max. prob: {:.4f}'.format(
+            progress_bar.set_description('{} Loss: {:.4f} Acc: {:.4f} Avg. conf: {:.4f} Avg. max. prob: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc, epoch_entropy, epoch_avg_max))
+            # print()
     return precision_holder
 
 
@@ -156,7 +158,7 @@ model = NeuralNetwork(p_dropout=0.5).to(device)
 print(model)
 optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 criterion = nn.CrossEntropyLoss()
-progress = train_model(model, 5, optimizer, criterion)
+train_progress = train_model(model, 5, optimizer, criterion)
 
 
 # %%
@@ -197,7 +199,6 @@ def run_validation(model, data_loader):
             test_progress.dropout_variances = np.append(
                 test_progress.dropout_variances, mc_var)
             test_progress.update(preds, labels, probs)
-
     return test_progress
 
 
@@ -208,6 +209,21 @@ val_progress = run_validation(model, data_loaders["val"])
 plot_uncertainties(val_progress)
 
 # %%
+import matplotlib.ticker as mtick
+idx = np.argsort(val_progress.dropout_variances)[::-1]
+labels = val_progress.labels[idx]
+predictions = val_progress.predictions[idx]
+accs=[]
+step = 10
+for _ in range(len(labels)//step):
+    accs.append((labels == predictions).sum()/len(labels))
+    labels = labels[step:]
+    predictions = predictions[step:]
+fig = plt.figure(1, (7,4))
+ax = fig.add_subplot(1,1,1)
+ax.plot(np.linspace(0,100,len(accs)), accs)
+ax.xaxis.set_major_formatter(mtick.PercentFormatter())
+    # %%
 
 idxs = np.argsort(accs)
 accs = np.array(accs)[idxs]
