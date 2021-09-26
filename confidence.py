@@ -1,6 +1,7 @@
 # To add a new cell, type '# %%'
 # To add a new markdown cell, type '# %% [markdown]'
 # %%
+import matplotlib.ticker as mtick
 from skimage.transform import rotate
 import torchvision.models as models
 import torchvision.datasets
@@ -209,21 +210,30 @@ val_progress = run_validation(model, data_loaders["val"])
 plot_uncertainties(val_progress)
 
 # %%
-import matplotlib.ticker as mtick
-idx = np.argsort(val_progress.dropout_variances)[::-1]
-labels = val_progress.labels[idx]
-predictions = val_progress.predictions[idx]
-accs=[]
-step = 10
-for _ in range(len(labels)//step):
-    accs.append((labels == predictions).sum()/len(labels))
-    labels = labels[step:]
-    predictions = predictions[step:]
-fig = plt.figure(1, (7,4))
-ax = fig.add_subplot(1,1,1)
-ax.plot(np.linspace(0,100,len(accs)), accs)
+
+
+def roc_stat(labels, predictions, step=10):
+    accs = []
+    for _ in range(len(labels)//step):
+        accs.append((labels == predictions).sum()/len(labels))
+        labels = labels[step:]
+        predictions = predictions[step:]
+    return accs
+
+
+# %%
+fig = plt.figure(1, (7, 4))
+ax = fig.add_subplot(1, 1, 1)
+for label, idx in [("MC dropout", np.argsort(val_progress.dropout_variances)[::-1]),
+                   ("Confidence", np.argsort(val_progress.confidences)),
+                   ("Max prob", np.argsort(val_progress.max_probs))]:
+    labels = val_progress.labels[idx]
+    predictions = val_progress.predictions[idx]
+    accs = roc_stat(labels, predictions)
+    ax.plot(np.linspace(0, 100, len(accs)), accs, label=label)
 ax.xaxis.set_major_formatter(mtick.PercentFormatter())
-    # %%
+ax.legend()
+# %%
 
 idxs = np.argsort(accs)
 accs = np.array(accs)[idxs]
@@ -283,3 +293,5 @@ for i, (x, y) in enumerate(zip(inputs, classes)):
         r_index += 1
         c_index = 0
 plt.subplots_adjust(hspace=.4)
+
+# %%
