@@ -85,6 +85,7 @@ class Progress:
         self.max_probs = np.array([])
         self.confidences = np.array([])
         self.dropout_variances = np.array([])
+        self.dropout_predictions = np.array([])
 
     def update(self, preds, labels, probs):
         self.predictions = np.append(
@@ -155,7 +156,7 @@ def train_model(model, num_epochs, optimizer, criterion):
 
 
 # %%
-model = NeuralNetwork(p_dropout=0.5).to(device)
+model = NeuralNetwork(p_dropout=0).to(device)
 print(model)
 optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 criterion = nn.CrossEntropyLoss()
@@ -196,7 +197,10 @@ def run_validation(model, data_loader):
             probs = softmax(outputs)
             _, preds = torch.max(outputs, 1)
             mc_output = mc_dropout(model, inputs).detach().numpy()
+            mc_predictions = np.mean(mc_output, axis=0).argmax(axis=-1)
             mc_var = mc_output.var(axis=0).sum(axis=-1)
+            test_progress.dropout_predictions = np.append(
+                test_progress.dropout_predictions, mc_predictions)
             test_progress.dropout_variances = np.append(
                 test_progress.dropout_variances, mc_var)
             test_progress.update(preds, labels, probs)
@@ -235,11 +239,43 @@ for label, idx in [("MC dropout", np.argsort(val_progress.dropout_variances)[::-
                    ("Confidence", np.argsort(val_progress.confidences)),
                    ("Max prob", np.argsort(val_progress.max_probs))]:
     labels = val_progress.labels[idx]
-    predictions = val_progress.predictions[idx]
+    predictions = val_progress.dropout_predictions[
+        idx] if name == "MC dropout" else val_progress.predictions[idx]
     accs = roc_stat(labels, predictions)
     ax.plot(np.linspace(0, 100, len(accs)), accs, label=label)
 ax.xaxis.set_major_formatter(mtick.PercentFormatter())
 ax.legend()
+
+# %%
+
+
+def set_training_mode_for_dropout(net, training=True):
+    """Set Dropout mode to train or eval."""
+
+    for m in net.modules():
+        #        print(m.__class__.__name__)
+        if m.__class__.__name__.startswith('Dropout'):
+            if training == True:
+                m.train()
+            else:
+                m.eval()
+    return net
+
+
+def set_dropout_p(model, block, prob, omitted_blocks=[]):
+    for name, p in block.named_children():
+        if any(map(lambda x: isinstance(p, x), omitted_blocks)):
+            continue
+        if isinstance(p, torch.nn.Module):
+            set_dropout_p(model, p, prob, omitted_blocks)
+        if isinstance(p, nn.Dropout):
+            print(name, p)
+            setattr(block, name, nn.Dropout(p=prob))
+            # bn = torch.nn.BatchNorm2d(p.num_features)
+            # bn.load_state_dict(p.state_dict())
+            # setattr(block, name, bn)
+
+
 # %%
 
 idxs = np.argsort(accs)
