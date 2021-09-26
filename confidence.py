@@ -208,6 +208,13 @@ val_progress = run_validation(model, data_loaders["val"])
 
 # %%
 plot_uncertainties(val_progress)
+# %%
+correct = val_progress.predictions == val_progress.labels
+plt.figure(figsize=(15, 5))
+plt.violinplot([val_progress.dropout_variances,
+               val_progress.dropout_variances[correct],
+               val_progress.dropout_variances[~correct]])
+
 
 # %%
 
