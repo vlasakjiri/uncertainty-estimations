@@ -112,3 +112,74 @@ for label, idx in [("MC dropout", np.argsort(val_progress.dropout_variances)[::-
     ax.plot(np.linspace(0, 100, len(accs)), accs, label=label)
 ax.xaxis.set_major_formatter(mtick.PercentFormatter())
 ax.legend()
+
+
+# %%
+def get_mc_dropout_predictions_variance(mc_dropout_output):
+    mc_predictions = mc_dropout_output.mean(axis=0).argmax(axis=-1)
+    mc_var = mc_dropout_output.var(axis=0).sum(axis=-1)
+    return mc_predictions, mc_var
+
+
+# %%
+inputs, classes = next(iter(data_loader_test))
+x = inputs[4][0]
+y = classes[0]
+fig, axs = plt.subplots(1, 5, figsize=(15, 5))
+softmax = torch.nn.Softmax(dim=1)
+model.eval()
+for i in range(5):
+    axs[i].axis("off")
+    with torch.no_grad():
+        outputs = model(torch.unsqueeze(x, 0))
+    probs = softmax(outputs)
+    _, preds = torch.max(outputs, 1)
+    confidence = 1-utils.metrics.normalized_entropy(probs, axis=1)
+    max_prob = torch.max(probs, dim=1)
+    mc_output = utils.mc_dropout.mc_dropout(model, torch.unsqueeze(x, 0))
+    mc_prediction, mc_var = get_mc_dropout_predictions_variance(mc_output)
+    axs[i].set_title(f'''Confidence: {confidence[0]:.4f}
+    Max prob: {max_prob[0][0]:.4f}
+    MC variance: {mc_var[0]:.4f}
+    Predicted: {class_names[max_prob[1][0]]}
+    ''')
+    axs[i].imshow(x, cmap="gray")
+    # x[0] = torch.tensor(rotate(x[0], -10))
+    x += .5 * torch.rand_like(x)
+
+# %%
+num_rows = 3
+num_cols = 4
+inputs, classes = next(iter(data_loader_test))
+inputs = inputs[:num_rows*num_cols]
+classes = classes[:num_rows*num_cols]
+
+
+with torch.no_grad():
+    predictions = softmax(model(inputs))
+confidences = 1 - utils.metrics.normalized_entropy(predictions, axis=1)
+mc_output = utils.mc_dropout.mc_dropout(model, inputs)
+mc_prediction, mc_var = get_mc_dropout_predictions_variance(mc_output)
+
+r_index = 0
+c_index = 0
+fig, axs = plt.subplots(num_rows,  num_cols, figsize=(15, 12))
+for i, (x, y) in enumerate(zip(inputs, classes)):
+    ax = axs[r_index][c_index]
+    ax.axis("off")
+    ax.imshow(x[0], cmap="gray")
+    predicted = torch.argmax(predictions[i])
+    ax.set_title(
+        f"""Actual: {class_names[y]}
+        Predicted: {class_names[predicted]}
+        Confidence: {confidences[i]:.4f}
+        Pred max: {torch.max(predictions[i]):.4f}
+        Mc dropout var.: {mc_var[i]:.4f}"""
+    )
+    c_index += 1
+    if c_index >= num_cols:
+        r_index += 1
+        c_index = 0
+plt.subplots_adjust(hspace=.5)
+
+# %%
