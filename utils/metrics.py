@@ -5,6 +5,7 @@ from scipy.stats import entropy
 
 class Progress:
     def __init__(self) -> None:
+        self.probs = []
         self.predictions = np.array([])
         self.labels = np.array([])
         self.max_probs = np.array([])
@@ -13,6 +14,7 @@ class Progress:
         self.dropout_predictions = np.array([])
 
     def update(self, preds, labels, probs):
+        self.probs.append(probs.numpy())
         self.predictions = np.append(
             self.predictions, preds.numpy())
         self.labels = np.append(

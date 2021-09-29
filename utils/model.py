@@ -60,9 +60,8 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, dataset_s
     return precision_holder
 
 
-def run_validation(model, data_loader):
+def run_validation(model, data_loader, test_progress: Progress, use_mc_dropout=False):
     softmax = nn.Softmax(dim=1)
-    test_progress = Progress()
     progress_bar = tqdm(data_loader)
     count = 0
     running_corrects = 0
@@ -74,14 +73,15 @@ def run_validation(model, data_loader):
         probs = softmax(outputs)
         _, preds = torch.max(outputs, 1)
         running_corrects += np.count_nonzero(preds == labels)
-        mc_output = mc_dropout(
-            model, inputs).detach().numpy()
-        mc_predictions = np.mean(mc_output, axis=0).argmax(axis=-1)
-        mc_var = mc_output.var(axis=0).sum(axis=-1)
-        test_progress.dropout_predictions = np.append(
-            test_progress.dropout_predictions, mc_predictions)
-        test_progress.dropout_variances = np.append(
-            test_progress.dropout_variances, mc_var)
+        if use_mc_dropout:
+            mc_output = mc_dropout(
+                model, inputs).detach().numpy()
+            mc_predictions = np.mean(mc_output, axis=0).argmax(axis=-1)
+            mc_var = mc_output.var(axis=0).sum(axis=-1)
+            test_progress.dropout_predictions = np.append(
+                test_progress.dropout_predictions, mc_predictions)
+            test_progress.dropout_variances = np.append(
+                test_progress.dropout_variances, mc_var)
         test_progress.update(preds, labels, probs)
         progress_bar.set_description(
             f"Avg. acc.: {running_corrects/count:.2f}")
