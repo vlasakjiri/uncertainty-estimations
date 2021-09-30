@@ -2,4 +2,6 @@ matplotlib
 numpy
 torch
 torchvision
+tqdm
+scipy
 git+https://github.com/modestyachts/ImageNetV2_pytorch
