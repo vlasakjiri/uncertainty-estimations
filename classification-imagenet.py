@@ -16,12 +16,6 @@ import utils.model
 device = "cpu"
 
 # %%
-transforms = torchvision.transforms.Compose([
-    torchvision.transforms.Resize(256),
-    torchvision.transforms.CenterCrop(224),
-    torchvision.transforms.ToTensor(),
-])
-
 transforms_normalized = torchvision.transforms.Compose([
     torchvision.transforms.Resize(256),
     torchvision.transforms.CenterCrop(224),
@@ -30,17 +24,12 @@ transforms_normalized = torchvision.transforms.Compose([
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
-data = ImageNetV2Dataset(
-    transform=transforms, location="imagenet")
-data_loader = torch.utils.data.DataLoader(data,
-                                          batch_size=256,
-                                          shuffle=False)
 
-data_normalized = ImageNetV2Dataset(
+dataset = ImageNetV2Dataset(
     transform=transforms_normalized, location="imagenet")
-data_loader_normalized = torch.utils.data.DataLoader(data_normalized,
-                                                     batch_size=256,
-                                                     shuffle=False)
+data_loader = torch.utils.data.DataLoader(dataset,
+                                          batch_size=64,
+                                          shuffle=False)
 
 
 # %%
@@ -54,7 +43,7 @@ mobilenet_small = torchvision.models.mobilenet.mobilenet_v3_small(
 
 # %%
 progress_normalized = utils.model.run_validation(
-    mobilenet_small, data_loader_normalized, utils.metrics.Progress())
+    mobilenet_small, data_loader, utils.metrics.Progress())
 progress_normalized.probs = np.concatenate(progress_normalized.probs)
 
 
