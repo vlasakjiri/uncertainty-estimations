@@ -7,7 +7,7 @@ from utils.mc_dropout import mc_dropout
 from utils.metrics import Progress, normalized_entropy
 
 
-def train_model(model, num_epochs, optimizer, criterion, data_loaders, dataset_sizes):
+def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
     softmax = nn.Softmax(dim=1)
     precision_holder = []
     for epoch in range(num_epochs):
@@ -60,24 +60,28 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, dataset_s
     return precision_holder
 
 
-def run_validation(model, data_loader, test_progress: Progress, use_mc_dropout=False):
+def run_validation(model, data_loader, test_progress: Progress, device, use_mc_dropout=False):
     softmax = nn.Softmax(dim=1)
     progress_bar = tqdm(data_loader)
     count = 0
     running_corrects = 0
+    model = model.to(device)
     for inputs, labels in progress_bar:
+        inputs = inputs.to(device)
         count += len(labels)
         model.eval()
         with torch.no_grad():
-            outputs = model(inputs)
+            outputs = model(inputs).cpu()
         probs = softmax(outputs)
         _, preds = torch.max(outputs, 1)
         running_corrects += np.count_nonzero(preds == labels)
         if use_mc_dropout:
             mc_output = mc_dropout(
-                model, inputs).detach().numpy()
-            mc_predictions = np.mean(mc_output, axis=0).argmax(axis=-1)
+                model, inputs).detach().cpu().numpy()
+            mc_means = np.mean(mc_output, axis=0)
+            mc_predictions = mc_means.argmax(axis=-1)
             mc_var = mc_output.var(axis=0).sum(axis=-1)
+            test_progress.dropout_outputs.append(mc_means)
             test_progress.dropout_predictions = np.append(
                 test_progress.dropout_predictions, mc_predictions)
             test_progress.dropout_variances = np.append(
@@ -85,6 +89,10 @@ def run_validation(model, data_loader, test_progress: Progress, use_mc_dropout=F
         test_progress.update(preds, labels, probs)
         progress_bar.set_description(
             f"Avg. acc.: {running_corrects/count:.2f}")
+    test_progress.probs = np.concatenate(test_progress.probs)
+    if use_mc_dropout:
+        test_progress.dropout_outputs = np.concatenate(
+            test_progress.dropout_outputs)
     return test_progress
 
 

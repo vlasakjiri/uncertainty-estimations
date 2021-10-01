@@ -38,5 +38,5 @@ def mc_dropout(model, X, T=40):
     out = torch.zeros(T, X.shape[0], num_classes)
     for i in range(T):
         with torch.no_grad():
-            out[i] = softmax(model(X))
+            out[i] = softmax(model(X).cpu())
     return out

@@ -10,6 +10,7 @@ class Progress:
         self.labels = np.array([])
         self.max_probs = np.array([])
         self.confidences = np.array([])
+        self.dropout_outputs = []
         self.dropout_variances = np.array([])
         self.dropout_predictions = np.array([])
 

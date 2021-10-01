@@ -13,7 +13,17 @@ import utils.metrics
 import utils.model
 
 # %%
-device = "cpu"
+# setting device on GPU if available, else CPU
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print('Using device:', device)
+print()
+
+# Additional Info when using cuda
+if device.type == 'cuda':
+    print(torch.cuda.get_device_name(0))
+    print('Memory Usage:')
+    print('Allocated:', round(torch.cuda.memory_allocated(0)/1024**3, 1), 'GB')
+    print('Cached:   ', round(torch.cuda.memory_reserved(0)/1024**3, 1), 'GB')
 
 # %%
 transforms_normalized = torchvision.transforms.Compose([
@@ -43,27 +53,7 @@ mobilenet_small = torchvision.models.mobilenet.mobilenet_v3_small(
 
 # %%
 progress_normalized = utils.model.run_validation(
-    mobilenet_small, data_loader, utils.metrics.Progress())
-progress_normalized.probs = np.concatenate(progress_normalized.probs)
-
-
-# %%
-fig = plt.figure(figsize=(14, 10))
-ax = fig.add_subplot(1, 1, 1)
-for label, idx in [("Confidence", np.argsort(progress_normalized.confidences)),
-                   ("Max prob", np.argsort(progress_normalized.max_probs))]:
-    labels = progress_normalized.labels[idx]
-    top5preds = progress_normalized.probs.argsort(axis=1)[:, :-6:-1][idx]
-    accs = []
-    correct = [label in preds for label, preds in zip(
-        labels, top5preds)]
-    for _ in range(len(labels)//10):
-        accs.append(sum(correct)/len(correct))
-        correct = correct[10:]
-    ax.plot(np.linspace(0, 100, len(accs)), accs, label=label)
-ax.xaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
-ax.set_title("Top 5 accuracy when removing most uncertain samples")
-ax.legend()
+    mobilenet_small, data_loader, utils.metrics.Progress(), device, use_mc_dropout=True)
 
 
 # %%
@@ -81,6 +71,26 @@ ax.xaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
 ax.set_title("Top 1 accuracy when removing most uncertain samples")
 ax.legend()
 
+
+# %%
+fig = plt.figure(figsize=(14, 10))
+ax = fig.add_subplot(1, 1, 1)
+for label, idx in [("MC dropout", np.argsort(progress_normalized.dropout_variances)[::-1]),
+                   ("Confidence", np.argsort(progress_normalized.confidences)),
+                   ("Max prob", np.argsort(progress_normalized.max_probs))]:
+    labels = progress_normalized.labels[idx]
+    outputs = progress_normalized.dropout_outputs if label == "MC dropout" else progress_normalized.probs
+    top5preds = outputs.argsort(axis=1)[:, :-6:-1][idx]
+    accs = []
+    correct = [label in preds for label, preds in zip(
+        labels, top5preds)]
+    for _ in range(len(labels)//10):
+        accs.append(sum(correct)/len(correct))
+        correct = correct[10:]
+    ax.plot(np.linspace(0, 100, len(accs)), accs, label=label)
+ax.xaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+ax.set_title("Top 5 accuracy when removing most uncertain samples")
+ax.legend()
 
 # %%
 inputs, classes = next(iter(data_loader))
