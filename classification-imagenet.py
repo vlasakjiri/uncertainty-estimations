@@ -51,20 +51,22 @@ class_names = pickle.load(urllib.request.urlopen(
 mobilenet_small = torchvision.models.mobilenet.mobilenet_v3_small(
     pretrained=True)
 
+vgg11_bn = torchvision.models.vgg11_bn(pretrained=True, progress=False)
+
 # %%
-progress_normalized = utils.model.run_validation(
-    mobilenet_small, data_loader, utils.metrics.Progress(), device, use_mc_dropout=True)
+progress = utils.model.run_validation(
+    vgg11_bn, data_loader, utils.metrics.Progress(), device, use_mc_dropout=True)
 
 
 # %%
 fig = plt.figure(figsize=(14, 10))
 ax = fig.add_subplot(1, 1, 1)
-for label, idx in [("MC dropout", np.argsort(progress_normalized.dropout_variances)[::-1]),
-                   ("Confidence", np.argsort(progress_normalized.confidences)),
-                   ("Max prob", np.argsort(progress_normalized.max_probs))]:
-    labels = progress_normalized.labels[idx]
-    predictions = progress_normalized.dropout_predictions[
-        idx] if label == "MC dropout" else progress_normalized.predictions[idx]
+for label, idx in [("MC dropout", np.argsort(progress.dropout_variances)[::-1]),
+                   ("Confidence", np.argsort(progress.confidences)),
+                   ("Max prob", np.argsort(progress.max_probs))]:
+    labels = progress.labels[idx]
+    predictions = progress.dropout_predictions[
+        idx] if label == "MC dropout" else progress.predictions[idx]
     accs = utils.metrics.roc_stat(labels, predictions, step=10)
     ax.plot(np.linspace(0, 100, len(accs)), accs, label=label)
 ax.xaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
@@ -75,11 +77,11 @@ ax.legend()
 # %%
 fig = plt.figure(figsize=(14, 10))
 ax = fig.add_subplot(1, 1, 1)
-for label, idx in [("MC dropout", np.argsort(progress_normalized.dropout_variances)[::-1]),
-                   ("Confidence", np.argsort(progress_normalized.confidences)),
-                   ("Max prob", np.argsort(progress_normalized.max_probs))]:
-    labels = progress_normalized.labels[idx]
-    outputs = progress_normalized.dropout_outputs if label == "MC dropout" else progress_normalized.probs
+for label, idx in [("MC dropout", np.argsort(progress.dropout_variances)[::-1]),
+                   ("Confidence", np.argsort(progress.confidences)),
+                   ("Max prob", np.argsort(progress.max_probs))]:
+    labels = progress.labels[idx]
+    outputs = progress.dropout_outputs if label == "MC dropout" else progress.probs
     top5preds = outputs.argsort(axis=1)[:, :-6:-1][idx]
     accs = []
     correct = [label in preds for label, preds in zip(
