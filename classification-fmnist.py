@@ -8,12 +8,21 @@ import torch
 import torch.nn as nn
 import torchvision.datasets
 
-import utils.mc_dropout
 import utils.metrics
 import utils.model
 
 # %%
-device = "cpu"
+# setting device on GPU if available, else CPU
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print('Using device:', device)
+print()
+
+# Additional Info when using cuda
+if device.type == 'cuda':
+    print(torch.cuda.get_device_name(0))
+    print('Memory Usage:')
+    print('Allocated:', round(torch.cuda.memory_allocated(0)/1024**3, 1), 'GB')
+    print('Cached:   ', round(torch.cuda.memory_reserved(0)/1024**3, 1), 'GB')
 
 # %%
 data_train = torchvision.datasets.FashionMNIST(
@@ -94,7 +103,8 @@ def plot_uncertainties(progress):
 
 # %%
 utils.mc_dropout.set_dropout_p(model, model, .5)
-val_progress = utils.model.run_validation(model, data_loaders["val"])
+val_progress = utils.model.run_validation(
+    model, data_loaders["val"], utils.metrics.Progress(), device, use_mc_dropout=True)
 
 # %%
 plot_uncertainties(val_progress)
