@@ -7,8 +7,14 @@
         "**/CVS": true,
         "**/.DS_Store": true,
         "**/Thumbs.db": true,
-        "**/imagenet": true,
-        "imagenet": true
+    },
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/*/**": true,
+        "**/.hg/store/**": true,
+        "**/imagenet/**": true,
+        "**progresses/**": true
     },
     "explorerExclude.backup": null
 }

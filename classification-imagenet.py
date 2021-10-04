@@ -48,14 +48,17 @@ class_names = pickle.load(urllib.request.urlopen(
 
 
 # %%
-mobilenet_small = torchvision.models.mobilenet.mobilenet_v3_small(
+# mobilenet_small = torchvision.models.mobilenet.mobilenet_v3_small(
+#     pretrained=True)
+
+mobilenet_large = torchvision.models.mobilenet.mobilenet_v3_large(
     pretrained=True)
 
-vgg11_bn = torchvision.models.vgg11_bn(pretrained=True, progress=False)
+# vgg11_bn = torchvision.models.vgg11_bn(pretrained=True, progress=False)
 
 # %%
 progress = utils.model.run_validation(
-    vgg11_bn, data_loader, utils.metrics.Progress(), device, use_mc_dropout=True)
+    mobilenet_large, data_loader, utils.metrics.Progress(), device, use_mc_dropout=True)
 
 
 # %%
@@ -63,13 +66,17 @@ fig = plt.figure(figsize=(14, 10))
 ax = fig.add_subplot(1, 1, 1)
 for label, idx in [("MC dropout", np.argsort(progress.dropout_variances)[::-1]),
                    ("Confidence", np.argsort(progress.confidences)),
-                   ("Max prob", np.argsort(progress.max_probs))]:
+                   ("Max prob", np.argsort(progress.max_probs)),
+                   ("Ideal", np.argsort(progress.predictions == progress.labels))]:
     labels = progress.labels[idx]
     predictions = progress.dropout_predictions[
         idx] if label == "MC dropout" else progress.predictions[idx]
     accs = utils.metrics.roc_stat(labels, predictions, step=10)
-    ax.plot(np.linspace(0, 100, len(accs)), accs, label=label)
+    x = np.linspace(0, 100, len(accs))
+    ax.plot(x, accs, label=label)
 ax.xaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+ax.set_xlabel("Samples removed")
+ax.set_ylabel("Validation accuracy")
 ax.set_title("Top 1 accuracy when removing most uncertain samples")
 ax.legend()
 
@@ -91,22 +98,25 @@ for label, idx in [("MC dropout", np.argsort(progress.dropout_variances)[::-1]),
         correct = correct[10:]
     ax.plot(np.linspace(0, 100, len(accs)), accs, label=label)
 ax.xaxis.set_major_formatter(matplotlib.ticker.PercentFormatter())
+ax.set_xlabel("Samples removed")
+ax.set_ylabel("Validation accuracy")
 ax.set_title("Top 5 accuracy when removing most uncertain samples")
 ax.legend()
 
 # %%
 inputs, classes = next(iter(data_loader))
+inputs = inputs.to(device)
 
 fig, axs = plt.subplots(1, 5, figsize=(15, 5))
 softmax = torch.nn.Softmax(dim=1)
-model = mobilenet_small
+model = mobilenet_large
 model.eval()
 for i in range(5):
     x = inputs[i]
     y = classes[i]
     axs[i].axis("off")
     with torch.no_grad():
-        outputs = model(torch.unsqueeze(x, 0))
+        outputs = model(torch.unsqueeze(x, 0)).cpu()
     probs = softmax(outputs)
     _, preds = torch.max(outputs, 1)
     confidence = 1-utils.metrics.normalized_entropy(probs, axis=1)
@@ -115,7 +125,7 @@ for i in range(5):
     Max prob: {max_prob[0].item():.4f}
     Predicted: {class_names[max_prob[1].item()]}
     ''')
-    axs[i].imshow(x.permute(1, 2, 0))
+    axs[i].imshow(x.cpu().permute(1, 2, 0))
     # x[0] = torch.tensor(rotate(x[0], -10))
 
 # %%
