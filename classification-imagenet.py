@@ -11,6 +11,7 @@ from imagenetv2_pytorch import ImageNetV2Dataset
 
 import utils.metrics
 import utils.model
+import utils.mc_dropout
 
 # %%
 # setting device on GPU if available, else CPU
@@ -48,18 +49,44 @@ class_names = pickle.load(urllib.request.urlopen(
 
 
 # %%
-# mobilenet_small = torchvision.models.mobilenet.mobilenet_v3_small(
-#     pretrained=True)
-
-mobilenet_large = torchvision.models.mobilenet.mobilenet_v3_large(
+mobilenet_small = torchvision.models.mobilenet.mobilenet_v3_small(
     pretrained=True)
+
+# mobilenet_large = torchvision.models.mobilenet.mobilenet_v3_large(
+#     pretrained=True)
 
 # vgg11_bn = torchvision.models.vgg11_bn(pretrained=True, progress=False)
 
 # %%
-progress = utils.model.run_validation(
-    mobilenet_large, data_loader, utils.metrics.Progress(), device, use_mc_dropout=True)
 
+
+def add_dropout(model, block, prob, omitted_blocks=[]):
+    for name, p in block.named_children():
+        if p in omitted_blocks:
+            continue
+        if isinstance(p, torch.nn.Module):
+            add_dropout(model, p, prob, omitted_blocks)
+        if isinstance(p, torch.nn.ReLU):
+            # bn = torch.nn.BatchNorm2d(p.num_features)
+            # bn.load_state_dict(p.state_dict())
+            # setattr(block, name, bn)
+            sequential = torch.nn.Sequential(
+                p, torch.nn.Dropout2d(p=prob, inplace=True))
+            setattr(block, name, sequential)
+            return model
+
+
+# %%
+add_dropout(
+    mobilenet_small, mobilenet_small, 0.002, mobilenet_small.features[0])
+
+# %%
+progress = utils.model.run_validation(
+    mobilenet_small, data_loader, utils.metrics.Progress(), device, use_mc_dropout=True)
+
+
+# with open("progresses/imagenet_mobilenet_small_trained_dropout.pickle", "rb") as f:
+#     progress = pickle.load(f)
 
 # %%
 fig = plt.figure(figsize=(14, 10))
@@ -104,8 +131,34 @@ ax.set_title("Top 5 accuracy when removing most uncertain samples")
 ax.legend()
 
 # %%
+fig = plt.figure(figsize=(14, 10))
+ax = fig.add_subplot(1, 1, 1)
+bins = np.linspace(0, 1, num=20)
+dropout_confidences = \
+    (progress.dropout_variances / max(progress.dropout_variances))
+for label, sort, idx in [("MC dropout", dropout_confidences, np.argsort(dropout_confidences)),
+                         ("Confidence", progress.confidences,
+                          np.argsort(progress.confidences)),
+                         ("Max prob", progress.max_probs, np.argsort(progress.max_probs))]:
+    sort = sort[idx]
+    labels = progress.labels[idx]
+    predictions = progress.predictions[idx]
+    inds = np.digitize(sort, bins)
+    accs = []
+    for i, bin in enumerate(bins):
+        idx = np.argwhere(inds == i)
+        acc = (predictions[idx] == labels[idx]).sum() / \
+            len(idx) if len(idx) > 0 else 0
+        accs.append(acc)
+    ax.plot(bins, accs, label=label)
+ax.plot(bins, np.linspace(0, 1, 20))
+ax.set_ylim([0, 1])
+ax.legend()
+
+# %%
 inputs, classes = next(iter(data_loader))
 inputs = inputs.to(device)
+
 
 fig, axs = plt.subplots(1, 5, figsize=(15, 5))
 softmax = torch.nn.Softmax(dim=1)
