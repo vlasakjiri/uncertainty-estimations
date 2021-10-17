@@ -25,6 +25,9 @@ def set_dropout_p(model, block, prob, omitted_blocks=[]):
         if isinstance(p, torch.nn.Dropout):
             setattr(block, name, torch.nn.Dropout(p=prob))
             return model
+        elif isinstance(p, torch.nn.Dropout2d):
+            setattr(block, name, torch.nn.Dropout2d(p=prob))
+            return model
             # bn = torch.nn.BatchNorm2d(p.num_features)
             # bn.load_state_dict(p.state_dict())
             # setattr(block, name, bn)
