@@ -41,7 +41,7 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
                     loss.backward()
                     optimizer.step()
 
-                probs = softmax(outputs)
+                probs = softmax(outputs).detach()
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
