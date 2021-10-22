@@ -1,5 +1,6 @@
 /fmnist
 /imagenet
+/VOC
 /progresses
 # Byte-compiled / optimized / DLL files
 __pycache__/

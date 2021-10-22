@@ -14,7 +14,8 @@
         "**/node_modules/*/**": true,
         "**/.hg/store/**": true,
         "**/imagenet/**": true,
-        "**progresses/**": true
+        "**progresses/**": true,
+        "**VOC/**": true
     },
     "explorerExclude.backup": null
 }
