@@ -79,13 +79,8 @@ def run_validation(model, data_loader, test_progress: Progress, device, use_mc_d
             mc_output = mc_dropout(
                 model, inputs).detach().cpu().numpy()
             mc_means = np.mean(mc_output, axis=0)
-            mc_predictions = mc_means.argmax(axis=-1)
             mc_var = mc_output.var(axis=0).sum(axis=-1)
-            test_progress.dropout_outputs.append(mc_means)
-            test_progress.dropout_predictions = np.append(
-                test_progress.dropout_predictions, mc_predictions)
-            test_progress.dropout_variances = np.append(
-                test_progress.dropout_variances, mc_var)
+            test_progress.update_mcd(mc_means, mc_var)
         test_progress.update(preds, labels, probs)
         progress_bar.set_description(
             f"Avg. acc.: {running_corrects/count:.2f}")

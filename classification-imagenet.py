@@ -49,8 +49,9 @@ class_names = pickle.load(urllib.request.urlopen(
 
 
 # %%
-mobilenet_small = torchvision.models.mobilenet.mobilenet_v3_small(
-    pretrained=True)
+# mobilenet_small = torchvision.models.mobilenet.mobilenet_v3_small(
+#     pretrained=True)
+
 
 # mobilenet_large = torchvision.models.mobilenet.mobilenet_v3_large(
 #     pretrained=True)
@@ -66,27 +67,28 @@ def add_dropout(model, block, prob, omitted_blocks=[]):
             continue
         if isinstance(p, torch.nn.Module):
             add_dropout(model, p, prob, omitted_blocks)
-        if isinstance(p, torch.nn.ReLU):
+        if "relu" in p.__class__.__name__.lower():
             # bn = torch.nn.BatchNorm2d(p.num_features)
             # bn.load_state_dict(p.state_dict())
             # setattr(block, name, bn)
             sequential = torch.nn.Sequential(
                 p, torch.nn.Dropout2d(p=prob, inplace=True))
             setattr(block, name, sequential)
-            return model
 
 
 # %%
-add_dropout(
-    mobilenet_small, mobilenet_small, 0.002, mobilenet_small.features[0])
+model = torchvision.models.resnet18(pretrained=True)
+# add_dropout(
+#     model, model, 5e-3)
+print(model)
 
 # %%
-progress = utils.model.run_validation(
-    mobilenet_small, data_loader, utils.metrics.Progress(), device, use_mc_dropout=True)
+# progress = utils.model.run_validation(
+#     model, data_loader, utils.metrics.Progress(), device, use_mc_dropout=True)
 
 
-# with open("progresses/imagenet_mobilenet_small_trained_dropout.pickle", "rb") as f:
-#     progress = pickle.load(f)
+with open("progresses/resnet18", "rb") as f:
+    progress = pickle.load(f)
 
 # %%
 fig = plt.figure(figsize=(14, 10))
@@ -133,8 +135,8 @@ ax.legend()
 # %%
 fig = plt.figure(figsize=(14, 10))
 ax = fig.add_subplot(1, 1, 1)
-bins = np.linspace(0, 1, num=20)
-dropout_confidences = \
+bins = np.linspace(0, 1, num=10)
+dropout_confidences = 1 -\
     (progress.dropout_variances / max(progress.dropout_variances))
 for label, sort, idx in [("MC dropout", dropout_confidences, np.argsort(dropout_confidences)),
                          ("Confidence", progress.confidences,
@@ -151,7 +153,7 @@ for label, sort, idx in [("MC dropout", dropout_confidences, np.argsort(dropout_
             len(idx) if len(idx) > 0 else 0
         accs.append(acc)
     ax.plot(bins, accs, label=label)
-ax.plot(bins, np.linspace(0, 1, 20))
+ax.plot(bins, np.linspace(0, 1, len(bins)))
 ax.set_ylim([0, 1])
 ax.legend()
 
