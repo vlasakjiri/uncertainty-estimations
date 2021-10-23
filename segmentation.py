@@ -2,11 +2,14 @@
 import pickle
 import urllib
 from matplotlib import pyplot as plt
+from tqdm import tqdm
 import matplotlib
 
 import numpy as np
 import torch
 import torchvision
+# from torchmetrics import IoU
+import torchmetrics
 from imagenetv2_pytorch import ImageNetV2Dataset
 
 import utils.metrics
@@ -35,13 +38,95 @@ transforms_normalized = torchvision.transforms.Compose([
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
+target_transforms = torchvision.transforms.Compose([
+    torchvision.transforms.Resize(256),
+    torchvision.transforms.CenterCrop(224),
+    torchvision.transforms.ToTensor()
+])
+
 
 dataset = torchvision.datasets.VOCSegmentation(
-    root="VOC", download=True, image_set="val")
+    root="VOC", download=True, image_set="val", transform=transforms_normalized, target_transform=target_transforms)
 data_loader = torch.utils.data.DataLoader(dataset,
                                           batch_size=64,
                                           shuffle=False)
 
+# %%
+VOC_CLASSES = [
+    "background",
+    "aeroplane",
+    "bicycle",
+    "bird",
+    "boat",
+    "bottle",
+    "bus",
+    "car",
+    "cat",
+    "chair",
+    "cow",
+    "dining table",
+    "dog",
+    "horse",
+    "motorbike",
+    "person",
+    "potted plant",
+    "sheep",
+    "sofa",
+    "train",
+    "tv/monitor",
+]
+
+
+VOC_COLORMAP = [
+    [0, 0, 0],
+    [128, 0, 0],
+    [0, 128, 0],
+    [128, 128, 0],
+    [0, 0, 128],
+    [128, 0, 128],
+    [0, 128, 128],
+    [128, 128, 128],
+    [64, 0, 0],
+    [192, 0, 0],
+    [64, 128, 0],
+    [192, 128, 0],
+    [64, 0, 128],
+    [192, 0, 128],
+    [64, 128, 128],
+    [192, 128, 128],
+    [0, 64, 0],
+    [128, 64, 0],
+    [0, 192, 0],
+    [128, 192, 0],
+    [0, 64, 128],
+]
+# %%
+# # Define the helper function
+
+
+def decode_segmap(image, nc=21):
+    label_colors = np.array([(0, 0, 0),  # 0=background
+                             # 1=aeroplane, 2=bicycle, 3=bird, 4=boat, 5=bottle
+                             (128, 0, 0), (0, 128, 0), (128, 128,
+                                                        0), (0, 0, 128), (128, 0, 128),
+                             # 6=bus, 7=car, 8=cat, 9=chair, 10=cow
+                             (0, 128, 128), (128, 128, 128), (64,
+                                                              0, 0), (192, 0, 0), (64, 128, 0),
+                             # 11=dining table, 12=dog, 13=horse, 14=motorbike, 15=person
+                             (192, 128, 0), (64, 0, 128), (192, 0,
+                                                           128), (64, 128, 128), (192, 128, 128),
+                             # 16=potted plant, 17=sheep, 18=sofa, 19=train, 20=tv/monitor
+                             (0, 64, 0), (128, 64, 0), (0, 192, 0), (128, 192, 0), (0, 64, 128)])
+    r = np.zeros_like(image).astype(np.uint8)
+    g = np.zeros_like(image).astype(np.uint8)
+    b = np.zeros_like(image).astype(np.uint8)
+    for l in range(0, nc):
+        idx = image == l
+        r[idx] = label_colors[l, 0]
+        g[idx] = label_colors[l, 1]
+        b[idx] = label_colors[l, 2]
+    rgb = np.stack([r, g, b], axis=2)
+    return rgb
 
 # %%
 # class_names = pickle.load(urllib.request.urlopen(
@@ -84,12 +169,62 @@ model = torchvision.models.segmentation.deeplabv3_mobilenet_v3_large(
 print(model)
 
 # %%
-# progress = utils.model.run_validation(
-#     model, data_loader, utils.metrics.Progress(), device, use_mc_dropout=True)
 
 
-with open("progresses/resnet18", "rb") as f:
-    progress = pickle.load(f)
+def run_validation(model, data_loader, test_progress, device, use_mc_dropout=False):
+    progress_bar = tqdm(data_loader)
+    count = 0
+    running_corrects = 0
+    model = model.to(device)
+    model.eval()
+
+    for inputs, gt in progress_bar:
+        gt = (gt * 255).squeeze().int()
+        gt[gt == 255] = 21
+        inputs = inputs.to(device)
+        gt = gt.to(device)
+        count += torch.prod(torch.tensor(gt.shape))
+        with torch.no_grad():
+            outputs = model(inputs)["out"].softmax(dim=1)
+        # probs = softmax(outputs)
+        _, preds = torch.max(outputs, 1)
+        running_corrects += (preds == gt).sum()
+        print(torchmetrics.functional.iou(
+            preds, gt, ignore_index=21, num_classes=22))
+        # print(torchmetrics.functional.accuracy(
+        #     preds, gt, ignore_index=21, num_classes=22))
+
+        # return preds.cpu(), gt.cpu()
+        # print(iou(preds, gt))
+        # print(running_corrects, count)
+        # if use_mc_dropout:
+        #     mc_output = mc_dropout(
+        #         model, inputs).detach().cpu().numpy()
+        #     mc_means = np.mean(mc_output, axis=0)
+        #     mc_var = mc_output.var(axis=0).sum(axis=-1)
+        #     test_progress.update_mcd(mc_means, mc_var)
+        # test_progress.update(preds, labels, probs)
+        progress_bar.set_description(
+            f"Avg. acc.: {running_corrects/count:.2f}")
+    # test_progress.probs = np.concatenate(test_progress.probs)
+    # if use_mc_dropout:
+    #     test_progress.dropout_outputs = np.concatenate(
+    #         test_progress.dropout_outputs)
+    return test_progress
+
+
+# %%
+progress = run_validation(
+    model, data_loader, utils.metrics.Progress(), device, use_mc_dropout=False)
+
+
+# with open("progresses/resnet18", "rb") as f:
+#     progress = pickle.load(f)
+# %%
+fig, axs = plt.subplots(1, 2)
+axs[0].imshow(decode_segmap(preds[2]))
+axs[1].imshow(decode_segmap(gt[2]))
+
 
 # %%
 fig = plt.figure(figsize=(14, 10))
