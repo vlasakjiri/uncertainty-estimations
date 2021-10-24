@@ -76,35 +76,11 @@ VOC_CLASSES = [
     "tv/monitor",
 ]
 
-
-VOC_COLORMAP = [
-    [0, 0, 0],
-    [128, 0, 0],
-    [0, 128, 0],
-    [128, 128, 0],
-    [0, 0, 128],
-    [128, 0, 128],
-    [0, 128, 128],
-    [128, 128, 128],
-    [64, 0, 0],
-    [192, 0, 0],
-    [64, 128, 0],
-    [192, 128, 0],
-    [64, 0, 128],
-    [192, 0, 128],
-    [64, 128, 128],
-    [192, 128, 128],
-    [0, 64, 0],
-    [128, 64, 0],
-    [0, 192, 0],
-    [128, 192, 0],
-    [0, 64, 128],
-]
 # %%
 # # Define the helper function
 
 
-def decode_segmap(image, nc=21):
+def decode_segmap(image, nc=22):
     label_colors = np.array([(0, 0, 0),  # 0=background
                              # 1=aeroplane, 2=bicycle, 3=bird, 4=boat, 5=bottle
                              (128, 0, 0), (0, 128, 0), (128, 128,
@@ -116,7 +92,7 @@ def decode_segmap(image, nc=21):
                              (192, 128, 0), (64, 0, 128), (192, 0,
                                                            128), (64, 128, 128), (192, 128, 128),
                              # 16=potted plant, 17=sheep, 18=sofa, 19=train, 20=tv/monitor
-                             (0, 64, 0), (128, 64, 0), (0, 192, 0), (128, 192, 0), (0, 64, 128)])
+                             (0, 64, 0), (128, 64, 0), (0, 192, 0), (128, 192, 0), (0, 64, 128), (128, 128, 128)])
     r = np.zeros_like(image).astype(np.uint8)
     g = np.zeros_like(image).astype(np.uint8)
     b = np.zeros_like(image).astype(np.uint8)
@@ -127,21 +103,6 @@ def decode_segmap(image, nc=21):
         b[idx] = label_colors[l, 2]
     rgb = np.stack([r, g, b], axis=2)
     return rgb
-
-# %%
-# class_names = pickle.load(urllib.request.urlopen(
-#     'https://gist.githubusercontent.com/yrevar/6135f1bd8dcf2e0cc683/raw/d133d61a09d7e5a3b36b8c111a8dd5c4b5d560ee/imagenet1000_clsid_to_human.pkl'))
-
-
-# %%
-# mobilenet_small = torchvision.models.mobilenet.mobilenet_v3_small(
-#     pretrained=True)
-
-
-# mobilenet_large = torchvision.models.mobilenet.mobilenet_v3_large(
-#     pretrained=True)
-
-# vgg11_bn = torchvision.models.vgg11_bn(pretrained=True, progress=False)
 
 # %%
 
@@ -177,9 +138,12 @@ def run_validation(model, data_loader, test_progress, device, use_mc_dropout=Fal
     running_corrects = 0
     model = model.to(device)
     model.eval()
-
+    max_probs_list = []
+    preds_list = []
+    gt_list = []
+    entropies_list = []
     for inputs, gt in progress_bar:
-        gt = (gt * 255).squeeze().int()
+        gt = (gt * 255).squeeze().to(torch.uint8)
         gt[gt == 255] = 21
         inputs = inputs.to(device)
         gt = gt.to(device)
@@ -187,10 +151,17 @@ def run_validation(model, data_loader, test_progress, device, use_mc_dropout=Fal
         with torch.no_grad():
             outputs = model(inputs)["out"].softmax(dim=1)
         # probs = softmax(outputs)
-        _, preds = torch.max(outputs, 1)
+        max_probs, preds = torch.max(outputs, 1)
+        preds = preds.to(torch.uint8)
         running_corrects += (preds == gt).sum()
+        print(gt.element_size() * gt.nelement())
         print(torchmetrics.functional.iou(
             preds, gt, ignore_index=21, num_classes=22))
+        max_probs_list.append(max_probs.cpu())
+        preds_list.append(preds.cpu())
+        gt_list.append(gt.cpu())
+        entropies_list.append(
+            utils.metrics.normalized_entropy(outputs.cpu(), axis=1))
         # print(torchmetrics.functional.accuracy(
         #     preds, gt, ignore_index=21, num_classes=22))
 
@@ -210,11 +181,15 @@ def run_validation(model, data_loader, test_progress, device, use_mc_dropout=Fal
     # if use_mc_dropout:
     #     test_progress.dropout_outputs = np.concatenate(
     #         test_progress.dropout_outputs)
-    return test_progress
+    max_probs_list = np.concatenate(max_probs_list)
+    preds_list = np.concatenate(preds_list)
+    gt_list = np.concatenate(gt_list)
+    entropies_list = np.concatenate(entropies_list)
+    return max_probs_list, preds_list, gt_list, entropies_list
 
 
 # %%
-progress = run_validation(
+max_probs, preds, gt, entropies = run_validation(
     model, data_loader, utils.metrics.Progress(), device, use_mc_dropout=False)
 
 
