@@ -55,10 +55,10 @@ class NeuralNetwork(nn.Module):
         self.linear_relu_stack = nn.Sequential(
             nn.Linear(28*28, 512),
             nn.ReLU(),
-            nn.Linear(512, 512),
+            nn.Linear(512, 256),
             nn.ReLU(),
             nn.Dropout(p=p_dropout),
-            nn.Linear(512, 10),
+            nn.Linear(256, 10),
         )
 
     def forward(self, x):
@@ -70,17 +70,17 @@ class NeuralNetwork(nn.Module):
 # %%
 model = NeuralNetwork(p_dropout=0).to(device)
 print(model)
-optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+optimizer = torch.optim.Adam(model.parameters())
 criterion = nn.CrossEntropyLoss()
 train_progress = utils.model.train_model(
-    model, 5, optimizer, criterion, data_loaders, dataset_sizes)
+    model, 20, optimizer, criterion, data_loaders, device)
 
 
 # %%
 def plot_uncertainties(progress):
     correct = progress.predictions == progress.labels
-    mc_dropout_confidence = 1 - val_progress.dropout_variances / \
-        val_progress.dropout_variances.max()
+    mc_dropout_confidence = 1 - progress.dropout_variances / \
+        progress.dropout_variances.max()
     fig = plt.figure(figsize=(15, 5))
     ax = fig.add_subplot(1, 1, 1)
     ax.violinplot([progress.confidences, progress.max_probs, mc_dropout_confidence,
@@ -103,28 +103,54 @@ def plot_uncertainties(progress):
 
 # %%
 utils.mc_dropout.set_dropout_p(model, model, .5)
-val_progress = utils.model.run_validation(
+progress = utils.model.run_validation(
     model, data_loaders["val"], utils.metrics.Progress(), device, use_mc_dropout=True)
 
 # %%
-plot_uncertainties(val_progress)
+plot_uncertainties(progress)
 
 # %%
 fig = plt.figure(figsize=(14, 10))
 ax = fig.add_subplot(1, 1, 1)
-for label, idx in [("MC dropout", np.argsort(val_progress.dropout_variances)[::-1]),
-                   ("Confidence", np.argsort(val_progress.confidences)),
-                   ("Max prob", np.argsort(val_progress.max_probs))]:
-    labels = val_progress.labels[idx]
-    predictions = val_progress.dropout_predictions[
-        idx] if label == "MC dropout" else val_progress.predictions[idx]
+for label, idx in [("Dropout variance", np.argsort(progress.dropout_variances)[::-1]),
+                   ("Confidence", np.argsort(progress.confidences)),
+                   ("Max prob", np.argsort(progress.max_probs)),
+                   ("Dropout max probs", np.argsort(progress.dropout_outputs.max(axis=-1)))]:
+    labels = progress.labels[idx]
+    predictions = progress.dropout_predictions[
+        idx] if "dropout" in label.lower() else progress.predictions[idx]
     accs = utils.metrics.roc_stat(labels, predictions, step=10)
     ax.plot(np.linspace(0, 100, len(accs)), accs, label=label)
 ax.xaxis.set_major_formatter(mtick.PercentFormatter())
 ax.legend()
 
+# %%
+fig = plt.figure(figsize=(14, 10))
+ax = fig.add_subplot(1, 1, 1)
+bins = np.linspace(0, 1, num=10)
+dropout_max_probs = progress.dropout_outputs.max(axis=-1)
+for label, sort, idx in [("MC dropout", dropout_max_probs, np.argsort(dropout_max_probs)),
+                         ("Confidence", progress.confidences,
+                          np.argsort(progress.confidences)),
+                         ("Max prob", progress.max_probs, np.argsort(progress.max_probs))]:
+    sort = sort[idx]
+    labels = progress.labels[idx]
+    predictions = progress.predictions[idx]
+    inds = np.digitize(sort, bins)
+    accs = []
+    for i, bin in enumerate(bins):
+        idx = np.argwhere(inds == i)
+        acc = (predictions[idx] == labels[idx]).sum() / \
+            len(idx) if len(idx) > 0 else 0
+        accs.append(acc)
+    ax.plot(bins, accs, label=label)
+ax.plot(bins, np.linspace(0, 1, len(bins)))
+ax.set_ylim([0, 1])
+ax.legend()
 
 # %%
+
+
 def get_mc_dropout_predictions_variance(mc_dropout_output):
     mc_predictions = mc_dropout_output.mean(axis=0).argmax(axis=-1)
     mc_var = mc_dropout_output.var(axis=0).sum(axis=-1)
