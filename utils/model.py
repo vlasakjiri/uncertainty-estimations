@@ -29,6 +29,8 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
             count = 0
             progress_bar = tqdm(data_loaders[phase])
             for inputs, labels in progress_bar:
+                inputs = inputs.to(device)
+                labels = labels.to(device)
                 count += len(labels)
                 current_holder = precision_holder[epoch][phase]
                 optimizer.zero_grad()
@@ -46,10 +48,10 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
                 running_entropy += np.sum(1 -
-                                          normalized_entropy(probs.detach().numpy(), axis=1))
+                                          normalized_entropy(probs.detach().cpu(), axis=1))
                 running_maxes += torch.sum(torch.max(probs, dim=1)[0])
                 current_holder = current_holder.update(
-                    preds, labels, probs)
+                    preds.cpu(), labels.cpu(), probs.cpu())
 
                 epoch_loss = running_loss / count
                 epoch_acc = running_corrects.double() / count
