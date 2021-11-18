@@ -1,6 +1,6 @@
 
 import matplotlib.ticker as mtick
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, widgets
 import numpy as np
 import utils.metrics
 
@@ -42,23 +42,39 @@ def samples_removed_vs_acc(label_idx_list, labels_in, preds_in, dropout_preds_in
     ax.legend()
 
 
-def calibration_graph(label_idx_list, labels_in, preds_in, dropout_preds_in):
-    fig = plt.figure(figsize=(14, 10))
-    ax = fig.add_subplot(1, 1, 1)
-    bins = np.linspace(0, 1, num=10)
-    for label, sort, idx in label_idx_list:
+def calibration_graph(label_idx_list, labels_in, preds_in, dropout_preds_in, num_bins=10):
+    fig, axs = plt.subplots(1, len(label_idx_list), figsize=(14, 6))
+    bins = np.linspace(0.05, 0.95, num=10)
+    counts = []
+    for j, (label, sort, idx) in enumerate(label_idx_list):
+        ax = axs[j]
         sort = sort[idx]
         labels = labels_in[idx]
         predictions = dropout_preds_in[
             idx] if "dropout" in label.lower() else preds_in[idx]
         inds = np.digitize(sort, bins)
         accs = []
+        errors = []
+        counts.append([])
         for i, bin in enumerate(bins):
-            idx = np.argwhere(inds == i)
-            acc = (predictions[idx] == labels[idx]).sum() / \
-                len(idx) if len(idx) > 5 else 0
+            idx = np.argwhere((sort >= bin-0.05) & (sort <= bin+0.05))
+            if len(idx) > 20:
+                acc = (predictions[idx] == labels[idx]).sum() / len(idx)
+                err = np.abs(acc-bin)
+            else:
+                acc = 0
+                err = 0
             accs.append(acc)
-        ax.plot(bins, accs, label=label)
-    ax.plot(bins, np.linspace(0, 1, len(bins)))
-    ax.set_ylim([0, 1])
-    ax.legend()
+            errors.append(err)
+            counts[j].append(len(idx))
+        ax.bar(bins, accs, 0.1, label="Outputs", edgecolor="black")
+        ax.bar(bins, errors, 0.1, bottom=accs, label="Gap",
+               edgecolor="black")
+
+        ax.plot(np.linspace(0, 1, len(bins)),
+                np.linspace(0, 1, len(bins)), "k--")
+        ece = np.average(errors, weights=counts[j])*100
+        ax.annotate(f"ECE: {ece:.2f}%", (0, 0.8), fontsize=15)
+        ax.set_title(label)
+        ax.legend()
+    return counts

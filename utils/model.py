@@ -73,9 +73,9 @@ def run_validation(model, data_loader, test_progress: Progress, device, use_mc_d
         count += len(labels)
         model.eval()
         with torch.no_grad():
-            outputs = model(inputs).cpu()
-        probs = softmax(outputs)
-        _, preds = torch.max(outputs, 1)
+            logits = model(inputs).cpu()
+        probs = softmax(logits)
+        _, preds = torch.max(logits, 1)
         running_corrects += np.count_nonzero(preds == labels)
         if use_mc_dropout:
             mc_output = mc_dropout(
@@ -83,9 +83,11 @@ def run_validation(model, data_loader, test_progress: Progress, device, use_mc_d
             mc_means = np.mean(mc_output, axis=0)
             mc_var = mc_output.var(axis=0).sum(axis=-1)
             test_progress.update_mcd(mc_means, mc_var)
-        test_progress.update(preds, labels, probs)
+        test_progress.update(preds, labels, probs, logits)
         progress_bar.set_description(
-            f"Avg. acc.: {running_corrects/count:.2f}")
+            f"Avg. acc.: {100*running_corrects/count:.2f}")
+
+    test_progress.logits = np.concatenate(test_progress.logits)
     test_progress.probs = np.concatenate(test_progress.probs)
     if use_mc_dropout:
         test_progress.dropout_outputs = np.concatenate(
