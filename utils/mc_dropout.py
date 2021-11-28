@@ -33,8 +33,8 @@ def set_dropout_p(model, block, prob, omitted_blocks=[]):
             # setattr(block, name, bn)
 
 
-def mc_dropout(model, X, T=40):
-    num_classes = utils.model.get_number_of_classes(model)
+def mc_dropout(model, X, num_classes, T=40):
+    # num_classes = utils.model.get_number_of_classes(model)
     model.eval()
     set_training_mode_for_dropout(model)
     out = torch.zeros(T, X.shape[0], num_classes)

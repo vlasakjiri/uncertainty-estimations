@@ -83,9 +83,10 @@ def run_validation(model, data_loader, test_progress: Progress, device, use_mc_d
         running_corrects += np.count_nonzero(preds == labels)
         if use_mc_dropout:
             mc_means, mc_vars = utils.mc_dropout.mc_dropout(
-                model, inputs)
-            batch_nll = - utils.mc_dropout.compute_log_likelihood(
-                mc_means, torch.nn.functional.one_hot(labels, num_classes=mc_means.shape[-1]), torch.sqrt(mc_vars))
+                model, inputs, logits.shape[-1])
+            # batch_nll = - utils.mc_dropout.compute_log_likelihood(
+            #     mc_means, torch.nn.functional.one_hot(labels, num_classes=mc_means.shape[-1]), torch.sqrt(mc_vars))
+            batch_nll = torch.tensor([0])
             test_progress.update_mcd(mc_means, mc_vars, batch_nll)
 
         test_progress.update(preds, labels, probs, logits)
