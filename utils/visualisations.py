@@ -43,21 +43,22 @@ def samples_removed_vs_acc(label_idx_list, labels_in, preds_in, dropout_preds_in
 
 
 def calibration_graph(label_idx_list, labels_in, preds_in, dropout_preds_in, num_bins=10):
-    fig, axs = plt.subplots(1, len(label_idx_list), figsize=(14, 6))
+    fig, axs = plt.subplots(2, len(label_idx_list), figsize=(14, 10))
     bins = np.linspace(0.05, 0.95, num=10)
     counts = []
-    for j, (label, sort, idx) in enumerate(label_idx_list):
-        ax = axs[j]
-        sort = sort[idx]
+    for j, (label, confidence, idx) in enumerate(label_idx_list):
+        ax = axs[0][j]
+        confidence = confidence[idx]
         labels = labels_in[idx]
         predictions = dropout_preds_in[
             idx] if "dropout" in label.lower() else preds_in[idx]
-        inds = np.digitize(sort, bins)
+        inds = np.digitize(confidence, bins)
         accs = []
         errors = []
         counts.append([])
         for i, bin in enumerate(bins):
-            idx = np.argwhere((sort >= bin-0.05) & (sort <= bin+0.05))
+            idx = np.argwhere((confidence >= bin-0.05) &
+                              (confidence <= bin+0.05))
             if len(idx) > 20:
                 acc = (predictions[idx] == labels[idx]).sum() / len(idx)
                 err = np.abs(acc-bin)
@@ -74,7 +75,22 @@ def calibration_graph(label_idx_list, labels_in, preds_in, dropout_preds_in, num
         ax.plot(np.linspace(0, 1, len(bins)),
                 np.linspace(0, 1, len(bins)), "k--")
         ece = np.average(errors, weights=counts[j])*100
+        counts[j] = np.asarray(counts[j])
         ax.annotate(f"ECE: {ece:.2f}%", (0, 0.8), fontsize=15)
         ax.set_title(label)
+        ax.set_xlabel("Confidence")
+        ax.set_ylabel("Accuracy")
         ax.legend()
+        axs[1][j].bar(np.linspace(0.05, 0.95, 10),
+                      counts[j]/counts[j].sum(), 0.1, edgecolor="black")
+
+        axs[1][j].set_ylim(0, 1)
+        axs[1][j].axvline(confidence.mean(), c="r",
+                          ls="--", label="Confidence")
+        axs[1][j].axvline(np.average(accs, weights=counts[j]),
+                          c="g", ls="--", label="Accuracy")
+
+        axs[1][j].set_xlabel("Confidence")
+        axs[1][j].set_ylabel(r"% of Samples")
+        axs[1][j].legend()
     return counts

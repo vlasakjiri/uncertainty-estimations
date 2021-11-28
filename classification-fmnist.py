@@ -59,7 +59,7 @@ train_progress = utils.model.train_model(
 
 
 # %%
-# utils.mc_dropout.set_dropout_p(model, model, .15)
+utils.mc_dropout.set_dropout_p(model, model, .15)
 progress = utils.model.run_validation(
     model, data_loaders["val"], utils.metrics.Progress(), device, use_mc_dropout=True)
 
@@ -72,7 +72,7 @@ print(
     f"NLL: {nll:4f}"
 )
 
-mc_logits = progress.dropout_logits.mean(axis=0)
+# mc_logits = progress.dropout_logits.mean(axis=0)
 dropout_max_probs = progress.dropout_outputs.max(axis=-1)
 
 utils.visualisations.samples_removed_vs_acc([

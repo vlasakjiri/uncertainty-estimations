@@ -41,4 +41,14 @@ def mc_dropout(model, X, T=40):
     for i in range(T):
         with torch.no_grad():
             out[i] = model(X).cpu()
-    return out
+    probs = out.softmax(dim=2)
+    means = probs.mean(dim=0)
+    vars = probs.var(dim=0)
+    return means, vars
+
+
+def compute_log_likelihood(y_pred, y_true, sigma):
+    dist = torch.distributions.normal.Normal(loc=y_pred, scale=sigma)
+    log_likelihood = dist.log_prob(y_true)
+    log_likelihood = torch.mean(log_likelihood, dim=1)
+    return log_likelihood

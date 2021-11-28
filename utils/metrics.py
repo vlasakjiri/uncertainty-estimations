@@ -11,7 +11,7 @@ class Progress:
         self.labels = np.array([])
         self.max_probs = np.array([])
         self.confidences = np.array([])
-        self.dropout_logits = []
+        self.dropout_nlls = []
         self.dropout_outputs = []
         self.dropout_variances = np.array([])
         self.dropout_predictions = np.array([])
@@ -28,10 +28,10 @@ class Progress:
         self.confidences = np.append(self.confidences,
                                      1 - normalized_entropy(probs.detach().numpy(), axis=1))
 
-    def update_mcd(self, mc_logits, mc_means, mc_var):
-        self.dropout_logits.append(mc_logits.numpy())
+    def update_mcd(self, mc_means, mc_var, nll):
         mc_predictions = mc_means.argmax(axis=-1)
-        self.dropout_outputs.append(mc_means)
+        self.dropout_nlls.append(nll.numpy())
+        self.dropout_outputs.append(mc_means.numpy())
         self.dropout_predictions = np.append(
             self.dropout_predictions, mc_predictions)
         self.dropout_variances = np.append(

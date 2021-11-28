@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from utils.mc_dropout import mc_dropout
+import utils.mc_dropout
 from utils.metrics import Progress, normalized_entropy
 
 
@@ -51,7 +51,7 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
                                           normalized_entropy(probs.detach().cpu(), axis=1))
                 running_maxes += torch.sum(torch.max(probs, dim=1)[0])
                 current_holder = current_holder.update(
-                    preds.cpu(), labels.cpu(), probs.cpu())
+                    preds.cpu(), labels.cpu(), probs.cpu(), outputs.detach().cpu())
 
                 epoch_loss = running_loss / count
                 epoch_acc = running_corrects.double() / count
@@ -79,12 +79,12 @@ def run_validation(model, data_loader, test_progress: Progress, device, use_mc_d
         _, preds = torch.max(logits, 1)
         running_corrects += np.count_nonzero(preds == labels)
         if use_mc_dropout:
-            mc_output = mc_dropout(
+            mc_means, mc_vars = utils.mc_dropout.mc_dropout(
                 model, inputs)
-            mc_probs = mc_output.softmax(dim=1).cpu().numpy()
-            mc_means = np.mean(mc_probs, axis=0)
-            mc_var = mc_probs.var(axis=0).sum(axis=-1)
-            test_progress.update_mcd(mc_output, mc_means, mc_var)
+            batch_nll = - utils.mc_dropout.compute_log_likelihood(
+                mc_means, torch.nn.functional.one_hot(labels, num_classes=mc_means.shape[-1]), torch.sqrt(mc_vars))
+            test_progress.update_mcd(mc_means, mc_vars, batch_nll)
+
         test_progress.update(preds, labels, probs, logits)
         progress_bar.set_description(
             f"Avg. acc.: {100*running_corrects/count:.2f}")
