@@ -23,11 +23,12 @@ class MLP(nn.Module):
 
 class LeNet5(nn.Module):
 
-    def __init__(self, p_dropout=0, n_classes=10):
+    def __init__(self, p_dropout=0, n_channels=1, n_classes=10):
         super(LeNet5, self).__init__()
 
         self.feature_extractor = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=6, kernel_size=5, stride=1),
+            nn.Conv2d(in_channels=n_channels, out_channels=6,
+                      kernel_size=5, stride=1),
             nn.Tanh(),
             nn.AvgPool2d(kernel_size=2),
             nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5, stride=1),
@@ -54,11 +55,12 @@ class LeNet5(nn.Module):
 
 class LeNet5_dropout(nn.Module):
 
-    def __init__(self, p_dropout=0, n_classes=10):
+    def __init__(self, p_dropout=0, n_channels=1, n_classes=10):
         super(LeNet5_dropout, self).__init__()
 
         self.feature_extractor = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=6, kernel_size=5, stride=1),
+            nn.Conv2d(in_channels=n_channels, out_channels=6,
+                      kernel_size=5, stride=1),
             nn.Tanh(),
             nn.AvgPool2d(kernel_size=2),
             nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5, stride=1),

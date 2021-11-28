@@ -36,7 +36,10 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
                 optimizer.zero_grad()
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
-                    outputs = model(inputs)
+                    try:
+                        outputs = model(inputs)
+                    except:
+                        print(inputs.shape)
                 _, preds = torch.max(outputs, 1)
                 loss = criterion(outputs, labels)
                 if phase == 'train':

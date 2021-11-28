@@ -2,6 +2,7 @@
 /imagenet
 /VOC
 /mnist
+/cifar100
 /progresses
 # Byte-compiled / optimized / DLL files
 __pycache__/
