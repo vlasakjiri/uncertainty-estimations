@@ -37,9 +37,8 @@ def mc_dropout(model, X, T=40):
     num_classes = utils.model.get_number_of_classes(model)
     model.eval()
     set_training_mode_for_dropout(model)
-    softmax = torch.nn.Softmax(dim=1)
     out = torch.zeros(T, X.shape[0], num_classes)
     for i in range(T):
         with torch.no_grad():
-            out[i] = softmax(model(X).cpu())
+            out[i] = model(X).cpu()
     return out

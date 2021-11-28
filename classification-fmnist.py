@@ -31,14 +31,14 @@ transforms = torchvision.transforms.Compose([torchvision.transforms.Resize((32, 
                                              torchvision.transforms.ToTensor()])
 
 data_train = torchvision.datasets.FashionMNIST(
-    "fashionmnist", download=True, train=True, transform=transforms)
+    "fmnist", download=True, train=True, transform=transforms)
 data_loader_train = torch.utils.data.DataLoader(data_train,
                                                 batch_size=32,
                                                 shuffle=True,
                                                 )
 
 data_test = torchvision.datasets.FashionMNIST(
-    "fashionmnist", download=True, train=False, transform=transforms)
+    "fmnist", download=True, train=False, transform=transforms)
 data_loader_test = torch.utils.data.DataLoader(data_test,
                                                batch_size=32,
                                                shuffle=False)
@@ -65,6 +65,14 @@ progress = utils.model.run_validation(
 
 
 # %%
+nll = criterion(torch.tensor(progress.logits), torch.tensor(
+    progress.labels, dtype=torch.long)).item()
+print(
+    f"Accuracy: {(progress.predictions==progress.labels).sum()*100/len(progress.labels):.2f}%, "
+    f"NLL: {nll:4f}"
+)
+
+mc_logits = progress.dropout_logits.mean(axis=0)
 dropout_max_probs = progress.dropout_outputs.max(axis=-1)
 
 utils.visualisations.samples_removed_vs_acc([

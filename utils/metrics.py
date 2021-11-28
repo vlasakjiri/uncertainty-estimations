@@ -28,7 +28,8 @@ class Progress:
         self.confidences = np.append(self.confidences,
                                      1 - normalized_entropy(probs.detach().numpy(), axis=1))
 
-    def update_mcd(self, mc_means, mc_var):
+    def update_mcd(self, mc_logits, mc_means, mc_var):
+        self.dropout_logits.append(mc_logits.numpy())
         mc_predictions = mc_means.argmax(axis=-1)
         self.dropout_outputs.append(mc_means)
         self.dropout_predictions = np.append(
