@@ -60,12 +60,12 @@ def calibration_graph(label_idx_list, labels_in, preds_in, dropout_preds_in, num
             idx = np.argwhere((confidence >= bin-0.05) &
                               (confidence <= bin+0.05))
             if len(idx) > 20:
-                acc = (predictions[idx] == labels[idx]).sum() / len(idx)
-                err = np.abs(acc-bin)
+                mean_acc = (predictions[idx] == labels[idx]).sum() / len(idx)
+                err = np.abs(mean_acc-bin)
             else:
-                acc = 0
+                mean_acc = 0
                 err = 0
-            accs.append(acc)
+            accs.append(mean_acc)
             errors.append(err)
             counts[j].append(len(idx))
         ax.bar(bins, accs, 0.1, label="Outputs", edgecolor="black")
@@ -85,10 +85,13 @@ def calibration_graph(label_idx_list, labels_in, preds_in, dropout_preds_in, num
                       counts[j]/counts[j].sum(), 0.1, edgecolor="black")
 
         axs[1][j].set_ylim(0, 1)
-        axs[1][j].axvline(confidence.mean(), c="r",
-                          ls="--", label="Confidence")
-        axs[1][j].axvline(np.average(accs, weights=counts[j]),
-                          c="g", ls="--", label="Accuracy")
+
+        mean_conf = confidence.mean()
+        axs[1][j].axvline(mean_conf, c="r",
+                          ls="--", label=f"Confidence = {mean_conf:.3f}")
+        mean_acc = np.average(accs, weights=counts[j])
+        axs[1][j].axvline(mean_acc,
+                          c="g", ls="--", label=f"Accuracy = {mean_acc:.3f}")
 
         axs[1][j].set_xlabel("Confidence")
         axs[1][j].set_ylabel(r"% of Samples")
