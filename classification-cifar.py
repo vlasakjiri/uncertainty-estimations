@@ -15,6 +15,7 @@ import utils.model
 
 import models.mnist
 import models.resnet_dropout
+import models.resnet
 
 # %%
 # setting device on GPU if available, else CPU
@@ -65,29 +66,29 @@ data_loaders = {"train": data_loader_train,
                 "val": data_loader_val, "test": data_loader_test}
 
 # %%
-# model = torch.load("models/cifar100_resnet18")
+model = torch.load("models/cifar100_resnet18_train_val_split")
 # model_dropout = torch.load("models/cifar100_resnet18_0.2dropout_all")
 # model_dropout.load_state_dict(model.state_dict())
 # model = model_dropout
 
 # %%
-model = models.resnet_dropout.ResNet18Dropout(
-    num_classes=100, p=0.1).to(device)
-print(model)
-optimizer = torch.optim.Adam(model.parameters())
-criterion = nn.CrossEntropyLoss()
-train_progress = utils.model.train_model(
-    model, 50, optimizer, criterion, data_loaders, device)
+# model = models.resnet.ResNet18(
+#     num_classes=100).to(device)
+# print(model)
+# optimizer = torch.optim.Adam(model.parameters())
+# criterion = nn.CrossEntropyLoss()
+# train_progress = utils.model.train_model(
+#     model, 50, optimizer, criterion, data_loaders, device)
 
 # %%
-torch.save(model, "models/cifar100_resnet18_0.1dropout_all")
+torch.save(model, "models/cifar100_resnet18_train_val_split")
 
 # %%
-model.dropout = torch.nn.Dropout(p=0)
+# model.dropout = torch.nn.Dropout(p=0)
 
 # %%
 scaled_model = ModelWithTemperature(model)
-scaled_model.set_temperature(data_loader_test)
+scaled_model.set_temperature(data_loader_val)
 
 # %%
 # utils.mc_dropout.set_dropout_p(model, model, .03)
