@@ -43,7 +43,7 @@ def samples_removed_vs_acc(label_idx_list, labels_in, preds_in, dropout_preds_in
 
 
 def calibration_graph(label_idx_list, labels_in, num_bins=10):
-    fig, axs = plt.subplots(2, len(label_idx_list), figsize=(14, 10))
+    fig, axs = plt.subplots(2, len(label_idx_list), figsize=(22, 9))
     bins = np.linspace(0.05, 0.95, num=10)
     counts = []
     for j, (label, confidence, idx, predictions) in enumerate(label_idx_list):
