@@ -54,3 +54,31 @@ def roc_stat(labels, predictions, step=10):
         labels = labels[step:]
         predictions = predictions[step:]
     return accs
+
+
+def compute_brier_score_avg(y_pred, y_true):
+    """Brier score implementation follows 
+    https://papers.nips.cc/paper/7219-simple-and-scalable-predictive-uncertainty-estimation-using-deep-ensembles.pdf.
+    The lower the Brier score is for a set of predictions, the better the predictions are calibrated."""
+
+    brier_score = torch.mean((y_true-y_pred)**2, 1)
+    return brier_score.mean().item()
+
+
+def compute_calibration_metrics(predictions, labels, confidences, bins):
+    accs = []
+    errors = []
+    counts = []
+    for i, bin in enumerate(bins):
+        idx = np.argwhere((confidences >= bin - 0.05) &
+                          (confidences <= bin + 0.05))
+        if len(idx) > 20:
+            mean_acc = (predictions[idx] == labels[idx]).sum() / len(idx)
+            err = np.abs(mean_acc-bin)
+        else:
+            mean_acc = 0
+            err = 0
+        accs.append(mean_acc)
+        errors.append(err)
+        counts.append(len(idx))
+    return accs, errors, counts

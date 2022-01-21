@@ -2,6 +2,7 @@
 import matplotlib.ticker as mtick
 from matplotlib import pyplot as plt, widgets
 import numpy as np
+from sklearn import metrics
 import utils.metrics
 
 
@@ -45,54 +46,41 @@ def samples_removed_vs_acc(label_idx_list, labels_in, preds_in, dropout_preds_in
 def calibration_graph(label_idx_list, labels_in, num_bins=10):
     fig, axs = plt.subplots(2, len(label_idx_list), figsize=(22, 9))
     bins = np.linspace(0.05, 0.95, num=10)
-    counts = []
     for j, (label, confidence, idx, predictions) in enumerate(label_idx_list):
         ax = axs[0][j]
         confidence = confidence[idx]
         labels = labels_in[idx]
         predictions = predictions[idx]
-        inds = np.digitize(confidence, bins)
-        accs = []
-        errors = []
-        counts.append([])
-        for i, bin in enumerate(bins):
-            idx = np.argwhere((confidence >= bin-0.05) &
-                              (confidence <= bin+0.05))
-            if len(idx) > 20:
-                mean_acc = (predictions[idx] == labels[idx]).sum() / len(idx)
-                err = np.abs(mean_acc-bin)
-            else:
-                mean_acc = 0
-                err = 0
-            accs.append(mean_acc)
-            errors.append(err)
-            counts[j].append(len(idx))
+        accs, errors, counts = utils.metrics.compute_calibration_metrics(
+            predictions, labels, confidence, bins)
+        counts = np.asarray(counts)
+        ece = np.average(errors, weights=counts) * 100
+        mean_acc = np.average(accs, weights=counts)
+
+
         ax.bar(bins, accs, 0.1, label="Outputs", edgecolor="black")
         ax.bar(bins, errors, 0.1, bottom=accs, label="Gap",
                edgecolor="black")
 
         ax.plot(np.linspace(0, 1, len(bins)),
                 np.linspace(0, 1, len(bins)), "k--")
-        ece = np.average(errors, weights=counts[j])*100
-        counts[j] = np.asarray(counts[j])
+
         ax.annotate(f"ECE: {ece:.2f}%", (0, 0.8), fontsize=15)
         ax.set_title(label)
         ax.set_xlabel("Confidence")
         ax.set_ylabel("Accuracy")
         ax.legend()
         axs[1][j].bar(np.linspace(0.05, 0.95, 10),
-                      counts[j]/counts[j].sum(), 0.1, edgecolor="black")
+                      counts/counts.sum(), 0.1, edgecolor="black")
 
         axs[1][j].set_ylim(0, 1)
 
         mean_conf = confidence.mean()
         axs[1][j].axvline(mean_conf, c="r",
                           ls="--", label=f"Confidence = {mean_conf:.3f}")
-        mean_acc = np.average(accs, weights=counts[j])
         axs[1][j].axvline(mean_acc,
                           c="g", ls="--", label=f"Accuracy = {mean_acc:.3f}")
 
         axs[1][j].set_xlabel("Confidence")
         axs[1][j].set_ylabel(r"% of Samples")
         axs[1][j].legend()
-    return counts
