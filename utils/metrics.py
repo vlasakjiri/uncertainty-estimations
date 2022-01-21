@@ -57,7 +57,7 @@ def roc_stat(labels, predictions, step=10):
 
 
 def compute_brier_score_avg(y_pred, y_true):
-    """Brier score implementation follows 
+    """Brier score implementation follows
     https://papers.nips.cc/paper/7219-simple-and-scalable-predictive-uncertainty-estimation-using-deep-ensembles.pdf.
     The lower the Brier score is for a set of predictions, the better the predictions are calibrated."""
 
@@ -65,10 +65,13 @@ def compute_brier_score_avg(y_pred, y_true):
     return brier_score.mean().item()
 
 
-def compute_calibration_metrics(predictions, labels, confidences, bins):
+def compute_calibration_metrics(predictions, labels, confidences, idx, bins):
     accs = []
     errors = []
     counts = []
+    confidences = confidences[idx]
+    labels = labels[idx]
+    predictions = predictions[idx]
     for i, bin in enumerate(bins):
         idx = np.argwhere((confidences >= bin - 0.05) &
                           (confidences <= bin + 0.05))

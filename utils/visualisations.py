@@ -48,11 +48,8 @@ def calibration_graph(label_idx_list, labels_in, num_bins=10):
     bins = np.linspace(0.05, 0.95, num=10)
     for j, (label, confidence, idx, predictions) in enumerate(label_idx_list):
         ax = axs[0][j]
-        confidence = confidence[idx]
-        labels = labels_in[idx]
-        predictions = predictions[idx]
         accs, errors, counts = utils.metrics.compute_calibration_metrics(
-            predictions, labels, confidence, bins)
+            predictions, labels_in, confidence, idx, bins)
         counts = np.asarray(counts)
         ece = np.average(errors, weights=counts) * 100
         mean_acc = np.average(accs, weights=counts)
