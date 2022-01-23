@@ -65,7 +65,7 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
     return precision_holder
 
 
-def run_validation(model, data_loader, test_progress: Progress, device, use_mc_dropout=False):
+def run_validation(model, data_loader, test_progress: Progress, device, mc_dropout_iters=0):
     softmax = nn.Softmax(dim=1)
     progress_bar = tqdm(data_loader)
     count = 0
@@ -81,9 +81,9 @@ def run_validation(model, data_loader, test_progress: Progress, device, use_mc_d
         probs = softmax(logits)
         _, preds = torch.max(logits, 1)
         running_corrects += np.count_nonzero(preds == labels)
-        if use_mc_dropout:
+        if mc_dropout_iters > 0:
             mc_means, mc_vars = utils.mc_dropout.mc_dropout(
-                model, inputs, logits.shape[-1])
+                model, inputs, logits.shape[-1], T=mc_dropout_iters)
             # batch_nll = - utils.mc_dropout.compute_log_likelihood(
             #     mc_means, torch.nn.functional.one_hot(labels, num_classes=mc_means.shape[-1]), torch.sqrt(mc_vars))
             batch_nll = torch.tensor([0])
@@ -95,7 +95,7 @@ def run_validation(model, data_loader, test_progress: Progress, device, use_mc_d
 
     test_progress.logits = np.concatenate(test_progress.logits)
     test_progress.probs = np.concatenate(test_progress.probs)
-    if use_mc_dropout:
+    if mc_dropout_iters > 0:
         test_progress.dropout_outputs = np.concatenate(
             test_progress.dropout_outputs)
     return test_progress
