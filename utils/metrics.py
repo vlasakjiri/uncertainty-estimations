@@ -1,6 +1,61 @@
 import numpy as np
 import torch
 from scipy.stats import entropy
+import sklearn.metrics
+
+
+class model_metrics:
+    def __init__(self) -> None:
+        self.acc = []
+        self.ece = []
+        self.confs = []
+        self.brier = []
+        self.auroc = []
+        self.aupr = []
+        self.strengths = []
+
+    def __str__(self) -> str:
+        return str(vars(self))
+
+
+def compute_model_stats(correct, max_probs, label):
+    fpr, tpr, _ = sklearn.metrics.roc_curve(correct, max_probs)
+    roc_auc = sklearn.metrics.auc(fpr, tpr)
+
+    prec, recall, _ = sklearn.metrics.precision_recall_curve(
+        correct, max_probs)
+    aupr = sklearn.metrics.auc(recall, prec)
+
+    return {
+        "fpr": fpr,
+        "tpr": tpr,
+        "auroc": roc_auc,
+        "prec": prec,
+        "recall": recall,
+        "aupr": aupr,
+        "label": label
+    }
+
+
+def update_model_metrics(progress, probs, max_probs, predictions, labels, bins, m: model_metrics(), strength):
+    accs, errors, counts = compute_calibration_metrics(
+        predictions, labels, max_probs, np.argsort(max_probs), bins)
+    ece = np.average(errors, weights=counts) * 100
+    mean_acc = np.average(accs, weights=counts)
+    mean_confidence = np.mean(max_probs)
+
+    y_true = torch.nn.functional.one_hot(torch.tensor(labels.astype("long")))
+    brier = compute_brier_score_avg(probs, y_true)
+
+    correct = predictions == labels
+    curve = compute_model_stats(correct, max_probs, "dasd")
+    m.acc.append(mean_acc)
+    m.ece.append(ece)
+    m.confs.append(mean_confidence)
+    m.brier.append(brier)
+    m.auroc.append(curve["auroc"])
+    m.aupr.append(curve["aupr"])
+    m.strengths.append(strength)
 
 
 class Progress:
