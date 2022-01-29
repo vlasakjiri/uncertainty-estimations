@@ -54,7 +54,6 @@ def calibration_graph(label_idx_list, labels_in, num_bins=10):
         ece = np.average(errors, weights=counts) * 100
         mean_acc = np.average(accs, weights=counts)
 
-
         ax.bar(bins, accs, 0.1, label="Outputs", edgecolor="black")
         ax.bar(bins, errors, 0.1, bottom=accs, label="Gap",
                edgecolor="black")
@@ -81,3 +80,4 @@ def calibration_graph(label_idx_list, labels_in, num_bins=10):
         axs[1][j].set_xlabel("Confidence")
         axs[1][j].set_ylabel(r"% of Samples")
         axs[1][j].legend()
+    plt.tight_layout()
