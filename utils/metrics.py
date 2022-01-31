@@ -62,7 +62,7 @@ class Progress:
     def __init__(self) -> None:
         self.logits = []
         self.probs = []
-        self.predictions = np.array([])
+        self.predictions = []
         self.labels = np.array([])
         self.max_probs = np.array([])
         self.confidences = np.array([])
@@ -74,8 +74,7 @@ class Progress:
     def update(self, preds, labels, probs, logits):
         self.logits.append(logits.numpy())
         self.probs.append(probs.numpy())
-        self.predictions = np.append(
-            self.predictions, preds.numpy())
+        self.predictions.append(preds.numpy())
         self.labels = np.append(
             self.labels, labels.data.numpy())
         self.max_probs = np.append(self.max_probs, torch.max(
