@@ -1,3 +1,4 @@
+from typing import OrderedDict
 import torch
 
 import utils.model
@@ -33,17 +34,22 @@ def set_dropout_p(model, block, prob, omitted_blocks=[]):
             # setattr(block, name, bn)
 
 
-def mc_dropout(model, X, num_classes, T=40):
-    # num_classes = utils.model.get_number_of_classes(model)
+def mc_dropout(model, X, output_shape, T=40):
+    # output_shape = utils.model.get_number_of_classes(model)
     model.eval()
     set_training_mode_for_dropout(model)
-    out = torch.zeros(T, X.shape[0], num_classes)
+    out = torch.zeros(T, X.shape[0], *output_shape)
     for i in range(T):
         with torch.no_grad():
-            out[i] = model(X).cpu()
+            x = model(X)
+            if isinstance(x, OrderedDict):
+                out[i] = x["out"].cpu()
+            else:
+                out[i] = x.cpu()
     probs = out.softmax(dim=2)
     means = probs.mean(dim=0)
     vars = probs.var(dim=0)
+    model.eval()
     return means, vars
 
 

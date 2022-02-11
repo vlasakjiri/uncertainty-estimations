@@ -1,3 +1,4 @@
+from typing import OrderedDict
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
@@ -19,6 +20,8 @@ class ModelWithTemperature(nn.Module):
 
     def forward(self, input):
         logits = self.model(input)
+        if isinstance(logits, OrderedDict):
+            logits =logits["out"]
         return self.temperature_scale(logits)
 
     def temperature_scale(self, logits):
@@ -26,32 +29,38 @@ class ModelWithTemperature(nn.Module):
         Perform temperature scaling on logits
         """
         # Expand temperature to match the size of logits
-        temperature = self.temperature.unsqueeze(
-            1).expand(logits.size(0), logits.size(1))
+        # temperature = self.temperature.unsqueeze(
+        #     1).expand(logits.size(0), logits.size(1))
+        temperature = self.temperature
         return logits / temperature
 
     # This function probably should live outside of this class, but whatever
-    def set_temperature(self, valid_loader):
+    def set_temperature(self, valid_loader, device):
         """
         Tune the tempearature of the model (using the validation set).
         We're going to set it to optimize NLL.
         valid_loader (DataLoader): validation set loader
         """
-        self.cuda()
-        nll_criterion = nn.CrossEntropyLoss().cuda()
-        ece_criterion = _ECELoss().cuda()
+        self.to(device)
+        nll_criterion = nn.CrossEntropyLoss()
+        ece_criterion = _ECELoss()
 
         # First: collect all the logits and labels for the validation set
         logits_list = []
         labels_list = []
         with torch.no_grad():
             for input, label in valid_loader:
-                input = input.cuda()
+                input = input.to(device)
                 logits = self.model(input)
+                if isinstance(logits, OrderedDict):
+                    logits = logits["out"].cpu()
+                    label = label.squeeze(1)
+                else:
+                    logits = logits.cpu()
                 logits_list.append(logits)
                 labels_list.append(label)
-            logits = torch.cat(logits_list).cuda()
-            labels = torch.cat(labels_list).cuda()
+            logits = torch.cat(logits_list)
+            labels = torch.cat(labels_list).to(torch.long)
 
         # Calculate NLL and ECE before temperature scaling
         before_temperature_nll = nll_criterion(logits, labels).item()
@@ -60,7 +69,7 @@ class ModelWithTemperature(nn.Module):
               (before_temperature_nll, before_temperature_ece))
 
         # Next: optimize the temperature w.r.t. NLL
-        optimizer = optim.LBFGS([self.temperature], lr=0.01, max_iter=500)
+        optimizer = optim.LBFGS([self.temperature], lr=0.01, max_iter=100)
 
         def eval():
             optimizer.zero_grad()
