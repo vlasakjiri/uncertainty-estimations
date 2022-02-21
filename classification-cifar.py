@@ -20,8 +20,8 @@ import models.mobilenet_v2
 
 # %%
 # setting device on GPU if available, else CPU
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = torch.device("cpu")
+device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+# device = torch.device("cpu")
 print('Using device:', device)
 print()
 
@@ -43,7 +43,9 @@ transforms_test = torchvision.transforms.Compose([transforms.ToTensor(),
 
 data_train = torchvision.datasets.CIFAR100(
     "cifar100", download=True, train=True, transform=transforms_train)
-data_train, data_val = torch.utils.data.random_split(data_train, [45000, 5000])
+data_train, data_val = torch.utils.data.random_split(
+    data_train, [45000, 5000], generator=torch.Generator().manual_seed(0))
+
 
 data_loader_train = torch.utils.data.DataLoader(data_train,
                                                 batch_size=64,
@@ -66,8 +68,10 @@ data_loaders = {"train": data_loader_train,
                 "val": data_loader_test}
 
 # %%
-model = models.mobilenet_v2.MobileNetV2(
-    num_classes=100, stem_stride=1).to(device)
+# model = models.resnet_dropout.ResNet18Dropout(100, p=0.2).to(device)
+
+model = models.mobilenet_v2.MobileNetV2Dropout(
+    num_classes=100, stem_stride=1, p_dropout=0.2).to(device)
 
 # model = torch.load("models/cifar100_resnet18_train_val_split")
 # model_dropout = torch.load("models/cifar100_resnet18_0.2dropout_all")
@@ -82,10 +86,10 @@ print(model)
 optimizer = torch.optim.Adam(model.parameters())
 criterion = nn.CrossEntropyLoss()
 train_progress = utils.model.train_model(
-    model, 200, optimizer, criterion, data_loaders, device, "checkpoints/cifar100_mobilenetv2.pt")
+    model, 200, optimizer, criterion, data_loaders, device, "checkpoints/cifar100_mobilenetv2_dropout.pt")
 
 # %%
-torch.save(model, "models/cifar100_mobilenetv2_train_val_split")
+# torch.save(model, "models/cifar100_mobilenetv2_train_val_split")
 
 # # %%
 # # model.dropout = torch.nn.Dropout(p=0)

@@ -4,5 +4,9 @@ torch
 torchvision
 tqdm
 scipy
+scikit-learn
 torchmetrics
+torchensemble
+ipywidgets 
+tensorboard
 git+https://github.com/modestyachts/ImageNetV2_pytorch

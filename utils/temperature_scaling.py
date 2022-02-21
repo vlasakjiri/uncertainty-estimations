@@ -2,6 +2,7 @@ from typing import OrderedDict
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
+from zmq import device
 
 
 class ModelWithTemperature(nn.Module):
@@ -13,15 +14,17 @@ class ModelWithTemperature(nn.Module):
             NOT the softmax (or log softmax)!
     """
 
-    def __init__(self, model):
+    def __init__(self, model, device):
         super(ModelWithTemperature, self).__init__()
-        self.model = model
-        self.temperature = nn.Parameter(torch.ones(1) * 1.5)
+        self.device = device
+        self.model = model.to(device)
+        self.temperature = nn.Parameter(
+            torch.ones(1) * 1.5)
 
     def forward(self, input):
         logits = self.model(input)
         if isinstance(logits, OrderedDict):
-            logits =logits["out"]
+            logits = logits["out"]
         return self.temperature_scale(logits)
 
     def temperature_scale(self, logits):
@@ -35,13 +38,12 @@ class ModelWithTemperature(nn.Module):
         return logits / temperature
 
     # This function probably should live outside of this class, but whatever
-    def set_temperature(self, valid_loader, device):
+    def set_temperature(self, valid_loader):
         """
         Tune the tempearature of the model (using the validation set).
         We're going to set it to optimize NLL.
         valid_loader (DataLoader): validation set loader
         """
-        self.to(device)
         nll_criterion = nn.CrossEntropyLoss()
         ece_criterion = _ECELoss()
 
@@ -50,7 +52,7 @@ class ModelWithTemperature(nn.Module):
         labels_list = []
         with torch.no_grad():
             for input, label in valid_loader:
-                input = input.to(device)
+                input = input.to(self.device)
                 logits = self.model(input)
                 if isinstance(logits, OrderedDict):
                     logits = logits["out"].cpu()
