@@ -1,5 +1,6 @@
 # %%
 
+from bdb import effective
 import torchmetrics
 from tqdm import tqdm
 import sklearn.metrics as metrics
@@ -15,13 +16,12 @@ import torchvision.transforms as transforms
 import utils.metrics
 import utils.model
 
-import models.resnet_dropout
-import models.resnet
+import models.unet_model
 
 # %%
 # setting device on GPU if available, else CPU
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = torch.device("cpu")
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device = torch.device("cpu")
 print('Using device:', device)
 print()
 
@@ -58,19 +58,19 @@ target_transforms = torchvision.transforms.Compose([
     torchvision.transforms.ToTensor(),
     VOCTransform()
 ])
-
-
+effective_batchsize = 64
+batchsize = 16
 data_train = torchvision.datasets.VOCSegmentation(
     root="VOC", download=True, image_set="train", transform=transforms_normalized, target_transform=target_transforms)
 data_loader_train = torch.utils.data.DataLoader(data_train,
-                                                batch_size=64,
+                                                batch_size=batchsize,
                                                 shuffle=False)
 
 
 data_test = torchvision.datasets.VOCSegmentation(
     root="VOC", download=True, image_set="val", transform=transforms_normalized, target_transform=target_transforms)
 data_loader_test = torch.utils.data.DataLoader(data_test,
-                                               batch_size=64,
+                                               batch_size=batchsize,
                                                shuffle=False)
 
 dataset_sizes = {"train": len(data_train), "val": len(data_test)}
@@ -78,8 +78,9 @@ data_loaders = {"train": data_loader_train, "val": data_loader_test}
 
 
 # %%
-model = torchvision.models.segmentation.deeplabv3_resnet50(
-    pretrained=False)
+# model = torchvision.models.segmentation.deeplabv3_mobilenet_v3_large(
+#     pretrained=False)
+model = models.unet_model.UNet(3, 21)
 # utils.mc_dropout.set_dropout_p(model, model, .25)
 print(model)
 
@@ -91,13 +92,9 @@ model.to(device)
 
 def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
     softmax = nn.Softmax(dim=1)
-    precision_holder = []
     model.to(device)
+    k = effective_batchsize // batchsize
     for epoch in range(num_epochs):
-        precision_holder.append({
-            "train": utils.metrics.Progress(),
-            "val": utils.metrics.Progress()
-        })
         print(f'Epoch {epoch+1}/{num_epochs}', flush=True)
         print('-' * 10, flush=True)
         for phase in ['train', 'val']:
@@ -107,49 +104,46 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
                 model.eval()   # Set model to evaluate mode
             running_loss = 0.0
             running_corrects = 0
-            running_entropy = 0.0
             running_maxes = 0.0
             numel = 0
-            count = 0
             progress_bar = tqdm(data_loaders[phase])
-            for inputs, labels in progress_bar:
+            optimizer.zero_grad()
+            for i, (inputs, labels) in enumerate(progress_bar):
                 inputs = inputs.to(device)
                 labels = labels.to(device)
                 numel += labels.numel()
-                current_holder = precision_holder[epoch][phase]
-                optimizer.zero_grad()
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
-                    outputs = model(inputs)["out"]
+                    outputs = model(inputs)
                 _, preds = torch.max(outputs, 1)
                 loss = criterion(outputs, labels)
                 if phase == 'train':
                     loss.backward()
-                    optimizer.step()
+                    if (i+1) % k == 0 or (i+1) == len(progress_bar):
+                        optimizer.step()
+                        optimizer.zero_grad()
 
                 probs = softmax(outputs).detach()
                 # statistics
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
                 running_maxes += torch.sum(torch.max(probs, dim=1)[0])
-                # current_holder = current_holder.update(
-                #     preds.cpu(), labels.cpu(), probs.cpu(), outputs.detach().cpu())
 
                 epoch_loss = loss.item()
                 iou = torchmetrics.functional.jaccard_index(
                     preds, labels).item()
-                dice = torchmetrics.functional.dice_score(preds, labels).item()
                 epoch_acc = running_corrects.double() / numel
                 # epoch_entropy = running_entropy / count
-                epoch_avg_max = running_maxes / count
-                progress_str = f'{phase} Loss: {epoch_loss:.2f} Acc: {epoch_acc:.2f} IOU: {iou:.2f} DICE: {dice:.2f} Avg. max. prob: {epoch_avg_max:.2f}'
+                epoch_avg_max = running_maxes / numel
+                progress_str = f'{phase} Loss: {epoch_loss:.2f} Acc: {epoch_acc:.2f} IOU: {iou:.2f} Avg. max. prob: {epoch_avg_max:.2f}'
                 progress_bar.set_description(progress_str)
-    return precision_holder
 
 
 optimizer = torch.optim.Adam(model.parameters())
-criterion = nn.CrossEntropyLoss().to(device)
+weights = torch.tensor(
+    utils.model.compute_segmentation_loss_weights(data_train, 21)).to(torch.float)
+criterion = nn.CrossEntropyLoss(weights).to(device)
 train_progress = train_model(
-    model, 40, optimizer, criterion, data_loaders, device)
+    model, 100, optimizer, criterion, data_loaders, device)
 
-torch.save(model, "models/VOC_segmentation_deeplabv3_resnet50")
+torch.save(model, "models/VOC_segmentation_unet")
