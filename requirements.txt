@@ -4,4 +4,5 @@ torch
 torchvision
 tqdm
 scipy
+torchmetrics
 git+https://github.com/modestyachts/ImageNetV2_pytorch
