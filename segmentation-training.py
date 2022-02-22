@@ -1,6 +1,6 @@
 # %%
 
-from bdb import effective
+from torch.utils.tensorboard import SummaryWriter
 import torchmetrics
 from tqdm import tqdm
 import sklearn.metrics as metrics
@@ -62,6 +62,11 @@ effective_batchsize = 64
 batchsize = 16
 data_train = torchvision.datasets.VOCSegmentation(
     root="VOC", download=True, image_set="train", transform=transforms_normalized, target_transform=target_transforms)
+
+train_set_size = int(len(data_train) * 0.9)
+valid_set_size = len(data_train) - train_set_size
+data_train, data_val = torch.utils.data.random_split(
+    data_train, [train_set_size, valid_set_size], generator=torch.Generator().manual_seed(0))
 data_loader_train = torch.utils.data.DataLoader(data_train,
                                                 batch_size=batchsize,
                                                 shuffle=False)
@@ -88,12 +93,14 @@ print(model)
 model.to(device)
 
 # %%
+writer = SummaryWriter()
 
 
-def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
+def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, save_model_filename=None):
     softmax = nn.Softmax(dim=1)
     model.to(device)
     k = effective_batchsize // batchsize
+    min_val_loss = 10000
     for epoch in range(num_epochs):
         print(f'Epoch {epoch+1}/{num_epochs}', flush=True)
         print('-' * 10, flush=True)
@@ -102,9 +109,10 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
                 model.train()  # Set model to training mode
             else:
                 model.eval()   # Set model to evaluate mode
-            running_loss = 0.0
             running_corrects = 0
             running_maxes = 0.0
+            losses = []
+            ious = []
             numel = 0
             progress_bar = tqdm(data_loaders[phase])
             optimizer.zero_grad()
@@ -125,18 +133,28 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device):
 
                 probs = softmax(outputs).detach()
                 # statistics
-                running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
                 running_maxes += torch.sum(torch.max(probs, dim=1)[0])
 
-                epoch_loss = loss.item()
+                losses.append(loss.item())
                 iou = torchmetrics.functional.jaccard_index(
                     preds, labels).item()
+                ious.append(iou)
+                epoch_iou = np.mean(ious)
+                epoch_loss = np.mean(losses)
                 epoch_acc = running_corrects.double() / numel
                 # epoch_entropy = running_entropy / count
                 epoch_avg_max = running_maxes / numel
-                progress_str = f'{phase} Loss: {epoch_loss:.2f} Acc: {epoch_acc:.2f} IOU: {iou:.2f} Avg. max. prob: {epoch_avg_max:.2f}'
+                progress_str = f'{phase} Loss: {epoch_loss:.2f} Acc: {epoch_acc:.2f} IOU: {epoch_iou:.2f} Avg. max. prob: {epoch_avg_max:.2f}'
                 progress_bar.set_description(progress_str)
+            writer.add_scalar(f"Acc/{phase}", epoch_acc, epoch)
+            writer.add_scalar(f"Loss/{phase}", epoch_loss, epoch)
+            writer.add_scalar(f"IOU/{phase}", epoch_iou, epoch)
+            if phase == "val" and epoch_loss < min_val_loss and save_model_filename is not None:
+                min_val_loss = epoch_loss
+                torch.save(model, save_model_filename)
+                print(
+                    f"Checkpoint with val_loss = {epoch_loss:.2f} saved.")
 
 
 optimizer = torch.optim.Adam(model.parameters())
@@ -144,6 +162,8 @@ weights = torch.tensor(
     utils.model.compute_segmentation_loss_weights(data_train, 21)).to(torch.float)
 criterion = nn.CrossEntropyLoss(weights).to(device)
 train_progress = train_model(
-    model, 100, optimizer, criterion, data_loaders, device)
+    model, 100, optimizer, criterion, data_loaders, device, "models/VOC_segmentation_unet")
 
-torch.save(model, "models/VOC_segmentation_unet")
+# torch.save(model, "models/VOC_segmentation_unet")
+
+# %%
