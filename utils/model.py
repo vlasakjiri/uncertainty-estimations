@@ -11,6 +11,7 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
     softmax = nn.Softmax(dim=1)
     precision_holder = []
     min_val_loss = 10000
+    model.to(device)
     for epoch in range(num_epochs):
         precision_holder.append({
             "train": Progress(),

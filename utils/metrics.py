@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
 from scipy.stats import entropy
 import sklearn.metrics
 
@@ -139,3 +140,12 @@ def compute_calibration_metrics(predictions, labels, confidences, idx, bins):
         errors.append(err)
         counts.append(len(idx))
     return accs, errors, counts
+
+def iou(preds, labels, num_classes):
+    preds = F.one_hot(preds, 21)[..., 1:]
+    labels = F.one_hot(labels, 21)[..., 1:]
+    intersection = (preds & labels).sum()
+    union = (preds | labels).sum()
+    iou = (intersection) / (union)
+    
+    return iou.nanmean()

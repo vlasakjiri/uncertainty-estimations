@@ -1,6 +1,6 @@
 # %%
 
-from torch.utils.tensorboard import SummaryWriter
+from typing import OrderedDict
 import torchmetrics
 from tqdm import tqdm
 import sklearn.metrics as metrics
@@ -10,17 +10,21 @@ import utils.visualisations
 import numpy as np
 import torch
 import torch.nn as nn
+import torchvision.models
 import torchvision.datasets
 import torchvision.transforms as transforms
+from torch.utils.tensorboard import SummaryWriter
 
 import utils.metrics
 import utils.model
 
 import models.unet_model
+import models.resnet
+import models.deeplabv3
 
 # %%
 # setting device on GPU if available, else CPU
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
 # device = torch.device("cpu")
 print('Using device:', device)
 print()
@@ -83,17 +87,27 @@ data_loaders = {"train": data_loader_train, "val": data_loader_test}
 
 
 # %%
-# model = torchvision.models.segmentation.deeplabv3_mobilenet_v3_large(
-#     pretrained=False)
-model = models.unet_model.UNet(3, 21)
+# model = torchvision.models.segmentation._deeplabv3_resnet(
+#     models.resnet.ResNet18(None), 21)
+
+# model = torchvision.models.segmentation.deeplabv3_resnet50(
+#     pretrained=False, pretrained_backbone=True)
+# model = models.unet_model.UNet(3, 21)
 # utils.mc_dropout.set_dropout_p(model, model, .25)
+
+
+backbone = torchvision.models.resnet50(
+    pretrained=False, replace_stride_with_dilation=[False, True, True])
+
+model = models.deeplabv3.deeplabv3_resnet(backbone, 21, False)
+
 print(model)
 
 # %%
 model.to(device)
 
 # %%
-writer = SummaryWriter()
+writer = SummaryWriter(comment="deeplab_resnet_trained_backbone")
 
 
 def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, save_model_filename=None):
@@ -123,6 +137,8 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs)
+                if isinstance(outputs, OrderedDict):
+                    outputs = outputs["out"]
                 _, preds = torch.max(outputs, 1)
                 loss = criterion(outputs, labels)
                 if phase == 'train':
@@ -137,8 +153,7 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                 running_maxes += torch.sum(torch.max(probs, dim=1)[0])
 
                 losses.append(loss.item())
-                iou = torchmetrics.functional.jaccard_index(
-                    preds, labels).item()
+                iou = utils.metrics.iou(preds, labels, 21).item()
                 ious.append(iou)
                 epoch_iou = np.mean(ious)
                 epoch_loss = np.mean(losses)
@@ -150,6 +165,10 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
             writer.add_scalar(f"Acc/{phase}", epoch_acc, epoch)
             writer.add_scalar(f"Loss/{phase}", epoch_loss, epoch)
             writer.add_scalar(f"IOU/{phase}", epoch_iou, epoch)
+
+            # iou = torchmetrics.functional.jaccard_index(preds, labels).item()
+            # print(iou)
+            # print(loss)
             if phase == "val" and epoch_loss < min_val_loss and save_model_filename is not None:
                 min_val_loss = epoch_loss
                 torch.save(model, save_model_filename)
@@ -157,12 +176,12 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                     f"Checkpoint with val_loss = {epoch_loss:.2f} saved.")
 
 
-optimizer = torch.optim.Adam(model.parameters())
+optimizer = torch.optim.Adam(model.classifier.parameters())
 weights = torch.tensor(
     utils.model.compute_segmentation_loss_weights(data_train, 21)).to(torch.float)
-criterion = nn.CrossEntropyLoss(weights).to(device)
+criterion = nn.CrossEntropyLoss().to(device)
 train_progress = train_model(
-    model, 100, optimizer, criterion, data_loaders, device, "models/VOC_segmentation_unet")
+    model, 100, optimizer, criterion, data_loaders, device, "checkpoints/deeplab_resnet_trained_backbone.pt")
 
 # torch.save(model, "models/VOC_segmentation_unet")
 

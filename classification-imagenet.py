@@ -33,33 +33,39 @@ if device.type == 'cuda':
     print('Cached:   ', round(torch.cuda.memory_reserved(0)/1024**3, 1), 'GB')
 
 # %%
-transforms_train = torchvision.transforms.Compose([transforms.RandomCrop(32, padding=4),
-                                                   transforms.RandomHorizontalFlip(),
-                                                   transforms.ToTensor(),
-                                                   transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))])
+normalize = torchvision.transforms.Normalize(
+    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
+transforms_train = torchvision.transforms.Compose([
+    torchvision.transforms.RandomResizedCrop(224),
+    torchvision.transforms.CenterCrop(224),
+    torchvision.transforms.ToTensor(),
+    normalize
+])
+
 
 transforms_test = torchvision.transforms.Compose([transforms.ToTensor(),
-                                                  transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))])
+                                                  normalize])
 
-data_train = torchvision.datasets.CIFAR100(
-    "cifar100", download=True, train=True, transform=transforms_train)
-data_train, data_val = torch.utils.data.random_split(
-    data_train, [45000, 5000], generator=torch.Generator().manual_seed(0))
+data_train = torchvision.datasets.ImageNet(
+    "/mnt/sda1/imagenet", split="train", transform=transforms_train)
+# data_train, data_val = torch.utils.data.random_split(
+#     data_train, [45000, 5000], generator=torch.Generator().manual_seed(0))
 
 
 data_loader_train = torch.utils.data.DataLoader(data_train,
-                                                batch_size=64,
+                                                batch_size=16,
                                                 shuffle=True,
                                                 )
-data_loader_val = torch.utils.data.DataLoader(data_val,
-                                              batch_size=64,
-                                              shuffle=False,
-                                              )
+# data_loader_val = torch.utils.data.DataLoader(data_val,
+#                                               batch_size=16,
+#                                               shuffle=False,
+#                                               )
 
-data_test = torchvision.datasets.CIFAR100(
-    "cifar100", download=True, train=False, transform=transforms_test)
+data_test = torchvision.datasets.ImageNet(
+    "/mnt/sda1/imagenet", split="val", transform=transforms_test)
 data_loader_test = torch.utils.data.DataLoader(data_test,
-                                               batch_size=64,
+                                               batch_size=16,
                                                shuffle=False)
 
 # %%
@@ -68,7 +74,8 @@ data_loaders = {"train": data_loader_train,
                 "val": data_loader_test}
 
 # %%
-model = models.resnet_dropout.ResNet18Dropout(100, p=0.1).to(device)
+model = torchvision.models.resnet50(
+    pretrained=False, replace_stride_with_dilation=[False, True, True])
 
 # model = models.mobilenet_v2.MobileNetV2Dropout(
 #     num_classes=100, stem_stride=1, p_dropout=0.1).to(device)
@@ -86,7 +93,7 @@ print(model)
 optimizer = torch.optim.Adam(model.parameters())
 criterion = nn.CrossEntropyLoss()
 train_progress = utils.model.train_model(
-    model, 200, optimizer, criterion, data_loaders, device, "checkpoints/cifar100_resnet18_dropout0.1.pt")
+    model, 200, optimizer, criterion, data_loaders, device, "checkpoints/imagenet_resnet50.pt")
 
 # %%
 # torch.save(model, "models/cifar100_mobilenetv2_train_val_split")

@@ -4,6 +4,8 @@
 /mnist
 /cifar100
 /checkpoints
+/BBBC010
+/runs
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
