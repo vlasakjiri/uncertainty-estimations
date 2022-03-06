@@ -24,7 +24,7 @@ import models.deeplabv3
 
 # %%
 # setting device on GPU if available, else CPU
-device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 # device = torch.device("cpu")
 print('Using device:', device)
 print()
@@ -63,7 +63,7 @@ target_transforms = torchvision.transforms.Compose([
     VOCTransform()
 ])
 effective_batchsize = 64
-batchsize = 16
+batchsize = 32
 data_train = torchvision.datasets.VOCSegmentation(
     root="VOC", download=True, image_set="train", transform=transforms_normalized, target_transform=target_transforms)
 
@@ -90,16 +90,36 @@ data_loaders = {"train": data_loader_train, "val": data_loader_test}
 # model = torchvision.models.segmentation._deeplabv3_resnet(
 #     models.resnet.ResNet18(None), 21)
 
-# model = torchvision.models.segmentation.deeplabv3_resnet50(
-#     pretrained=False, pretrained_backbone=True)
+model = torchvision.models.segmentation.deeplabv3_resnet50(
+    pretrained=True)
 # model = models.unet_model.UNet(3, 21)
 # utils.mc_dropout.set_dropout_p(model, model, .25)
 
 
-backbone = torchvision.models.resnet50(
-    pretrained=False, replace_stride_with_dilation=[False, True, True])
+# %%
+def add_dropout(model, block, prob, omitted_blocks=[]):
+    for name, p in block.named_children():
+        if any(map(lambda x: isinstance(p, x), omitted_blocks)):
+            continue
+        if isinstance(p, torch.nn.Module) or isinstance(p, torch.nn.Sequential):
+            add_dropout(model, p, prob, omitted_blocks)
 
-model = models.deeplabv3.deeplabv3_resnet(backbone, 21, False)
+        if isinstance(p, torch.nn.ReLU):
+            setattr(block, name, torch.nn.Sequential(
+                torch.nn.ReLU(), torch.nn.Dropout2d(p=prob)))
+
+
+#             # return model
+# add_dropout(model.backbone.layer3, model.backbone.layer3, 0.2)
+add_dropout(model.backbone.layer4, model.backbone.layer4, 0.2)
+
+# model.classifier[0].project[2] = torch.nn.ReLU()
+# model.classifier[3] = torch.nn.ReLU()
+# model.aux_classifier[2] = torch.nn.ReLU()
+# backbone = torchvision.models.resnet50(
+#     pretrained=False, replace_stride_with_dilation=[False, True, True])
+
+# model = models.deeplabv3.deeplabv3_resnet(backbone, 21, False)
 
 print(model)
 
@@ -107,7 +127,7 @@ print(model)
 model.to(device)
 
 # %%
-writer = SummaryWriter(comment="deeplab_resnet_trained_backbone")
+writer = SummaryWriter(comment="deeplab_resnet_finetune")
 
 
 def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, save_model_filename=None):
@@ -181,7 +201,7 @@ weights = torch.tensor(
     utils.model.compute_segmentation_loss_weights(data_train, 21)).to(torch.float)
 criterion = nn.CrossEntropyLoss().to(device)
 train_progress = train_model(
-    model, 100, optimizer, criterion, data_loaders, device, "checkpoints/deeplab_resnet_trained_backbone.pt")
+    model, 20, optimizer, criterion, data_loaders, device, "checkpoints/deeplab_resnet_finetune.pt")
 
 # torch.save(model, "models/VOC_segmentation_unet")
 

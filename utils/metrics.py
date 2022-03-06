@@ -141,11 +141,22 @@ def compute_calibration_metrics(predictions, labels, confidences, idx, bins):
         counts.append(len(idx))
     return accs, errors, counts
 
+
 def iou(preds, labels, num_classes):
-    preds = F.one_hot(preds, 21)[..., 1:]
-    labels = F.one_hot(labels, 21)[..., 1:]
+    preds = F.one_hot(preds, num_classes)[..., 1:]
+    labels = F.one_hot(labels, num_classes)[..., 1:]
     intersection = (preds & labels).sum()
     union = (preds | labels).sum()
     iou = (intersection) / (union)
-    
+
+    return iou.nanmean()
+
+
+def mean_class_iou(preds, labels, num_classes):
+    preds = F.one_hot(preds, num_classes)
+    labels = F.one_hot(labels, num_classes)
+    intersection = (preds & labels).sum((0, 1, 2))
+    union = (preds | labels).sum((0, 1, 2))
+    iou = (intersection) / (union)
+
     return iou.nanmean()

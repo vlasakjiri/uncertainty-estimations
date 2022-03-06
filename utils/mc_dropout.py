@@ -53,6 +53,19 @@ def mc_dropout(model, X, output_shape, T=40):
     return means, vars
 
 
+def add_dropout(model, block, prob, add_after=torch.nn.ReLU, dropout_cls=torch.nn.Dropout2d, omitted_blocks=[]):
+
+    for name, p in block.named_children():
+        if any(map(lambda x: isinstance(p, x), omitted_blocks)):
+            continue
+        if isinstance(p, torch.nn.Module) or isinstance(p, torch.nn.Sequential):
+            add_dropout(model, p, prob, add_after, dropout_cls, omitted_blocks)
+
+        if isinstance(p, add_after):
+            setattr(block, name, torch.nn.Sequential(
+                add_after(), dropout_cls(p=prob)))
+
+
 def compute_log_likelihood(y_pred, y_true, sigma):
     dist = torch.distributions.normal.Normal(loc=y_pred, scale=sigma)
     log_likelihood = dist.log_prob(y_true)

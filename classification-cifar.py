@@ -1,5 +1,6 @@
 # %%
 
+from xml.etree.ElementTree import Comment
 import sklearn.metrics as metrics
 from utils.temperature_scaling import ModelWithTemperature
 from matplotlib import pyplot as plt
@@ -9,6 +10,7 @@ import torch
 import torch.nn as nn
 import torchvision.datasets
 import torchvision.transforms as transforms
+from torch.utils.tensorboard import SummaryWriter
 
 import utils.metrics
 import utils.model
@@ -68,10 +70,10 @@ data_loaders = {"train": data_loader_train,
                 "val": data_loader_test}
 
 # %%
-model = models.resnet_dropout.ResNet18Dropout(100, p=0.1).to(device)
+# model = models.resnet_dropout.ResNet18Dropout(100, p=0.1).to(device)
 
-# model = models.mobilenet_v2.MobileNetV2Dropout(
-#     num_classes=100, stem_stride=1, p_dropout=0.1).to(device)
+model = models.mobilenet_v2.MobileNetV2Dropout(
+    num_classes=100, stem_stride=1, p_dropout=0.2).to(device)
 
 # model = torch.load("models/cifar100_resnet18_train_val_split")
 # model_dropout = torch.load("models/cifar100_resnet18_0.2dropout_all")
@@ -79,14 +81,13 @@ model = models.resnet_dropout.ResNet18Dropout(100, p=0.1).to(device)
 # model = model_dropout
 
 # %%
-
 # model = models.resnet.ResNet18(
 #     num_classes=100).to(device)
 print(model)
 optimizer = torch.optim.Adam(model.parameters())
 criterion = nn.CrossEntropyLoss()
 train_progress = utils.model.train_model(
-    model, 200, optimizer, criterion, data_loaders, device, "checkpoints/cifar100_resnet18_dropout0.1.pt")
+    model, 200, optimizer, criterion, data_loaders, device, "checkpoints/cifar100_mobilenetv2_dropout.pt", SummaryWriter(comment="cifar100_mobilenetv2_dropout"))
 
 # %%
 # torch.save(model, "models/cifar100_mobilenetv2_train_val_split")

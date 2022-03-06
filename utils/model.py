@@ -7,7 +7,7 @@ import utils.mc_dropout
 from utils.metrics import Progress, normalized_entropy
 
 
-def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, save_model_filename=None):
+def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, save_model_filename=None, writer=None):
     softmax = nn.Softmax(dim=1)
     precision_holder = []
     min_val_loss = 10000
@@ -62,6 +62,9 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                 epoch_avg_max = running_maxes / count
                 progress_str = f'{phase} Loss: {epoch_loss:.2f} Acc: {epoch_acc:.2f} Avg. conf: {epoch_entropy:.2f} Avg. max. prob: {epoch_avg_max:.2f}'
                 progress_bar.set_description(progress_str)
+            if writer:
+                writer.add_scalar(f"Acc/{phase}", epoch_acc, epoch)
+                writer.add_scalar(f"Loss/{phase}", epoch_loss, epoch)
             if phase == "val" and epoch_loss < min_val_loss and save_model_filename is not None:
                 min_val_loss = epoch_loss
                 torch.save(model, save_model_filename)
