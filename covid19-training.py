@@ -68,35 +68,6 @@ data_loaders = {"train": data_loader_train, "val": data_loader_test}
 
 # model = torch.load("checkpoints/VOC_segmentation_deeplabv3_mobilenet_v3_large.pt")
 # model = torch.load("checkpoints/unet_unewighted.pt")
-model = models.unet_model.UNet_Dropout(1, 4, 0.1)
-print(model)
-
-
-# %%
-# PyTorch
-class IoULoss(nn.Module):
-    def __init__(self, weight=None, size_average=True):
-        super(IoULoss, self).__init__()
-
-    def forward(self, inputs, targets, smooth=1):
-
-        # comment out if your model contains a sigmoid or equivalent activation layer
-        inputs = F.softmax(inputs, dim=1)
-        targets = F.one_hot(targets, num_classes=4)
-
-        # flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-
-        # intersection is equivalent to True Positive count
-        # union is the mutually inclusive area of all labels & predictions
-        intersection = (inputs * targets).sum()
-        total = (inputs + targets).sum()
-        union = total - intersection
-
-        IoU = (intersection + smooth)/(union + smooth)
-
-        return - torch.log(IoU)
 
 
 # %%
@@ -171,10 +142,14 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                     f"Checkpoint with val IOU = {epoch_iou:.3f} saved.")
 
 
-optimizer = torch.optim.Adam(model.parameters())
-weights = torch.tensor(
-    utils.model.compute_segmentation_loss_weights(data_train, 4), dtype=torch.float)
-criterion = nn.CrossEntropyLoss(weights).to(device)
-# criterion = IoULoss(weights).to(device)
-train_progress = train_model(
-    model, 200, optimizer, criterion, data_loaders, device, f"checkpoints/{EXPERIMENT_NAME}.pt")
+for i in range(5):
+    model = models.unet_model.UNet(1, 4)
+    print(model)
+
+    optimizer = torch.optim.Adam(model.parameters())
+    weights = torch.tensor(
+        utils.model.compute_segmentation_loss_weights(data_train, 4), dtype=torch.float)
+    criterion = nn.CrossEntropyLoss(weights).to(device)
+    # criterion = IoULoss(weights).to(device)
+    train_progress = train_model(
+        model, 200, optimizer, criterion, data_loaders, device, f"checkpoints/{EXPERIMENT_NAME}-{i}.pt")

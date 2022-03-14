@@ -14,6 +14,8 @@ class model_metrics:
         self.auroc = []
         self.aupr = []
         self.strengths = []
+        self.ious = []
+        self.mious = []
 
     def __str__(self) -> str:
         return str(vars(self))
