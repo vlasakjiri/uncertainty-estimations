@@ -25,8 +25,11 @@ import utils.visualisations
 from utils.temperature_scaling import ModelWithTemperature
 
 # %%
+EXPERIMENT_NAME = "faster_rcnn_box_predictor_dropout0.5"
+
+
 # setting device on GPU if available, else CPU
-device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 # device = torch.device("cpu")
 print('Using device:', device)
 print()
@@ -127,14 +130,33 @@ data_loader_test = torch.utils.data.DataLoader(data_test,
 # dataset_sizes = {"train": len(data_train), "val": len(data_test)}
 # data_loaders = {"train": data_loader_train, "val": data_loader_test}
 
-# %%
 
 # %%
+# model = torchvision.models.detection.ssd300_vgg16(
+#     pretrained=True, trainable_backbone_layers=0)
+
+# model.head = torchvision.models.detection.ssd.SSDHead(
+#     [512, 1024, 512, 256, 256, 256], [4, 6, 6, 6, 4, 4], 21)
 model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_fpn(
-    pretrained=True)
+    pretrained=True, trainable_backbone_layers=0)
 num_classes = len(VOC_CLASSES)
 in_features = model.roi_heads.box_predictor.cls_score.in_features
 model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+
+
+model.roi_heads.box_predictor.cls_score = torch.nn.Sequential(torch.nn.Dropout(p=.5),
+                                                              model.roi_heads.box_predictor.cls_score)
+
+model.roi_heads.box_predictor.bbox_pred = torch.nn.Sequential(torch.nn.Dropout(p=.5),
+                                                              model.roi_heads.box_predictor.bbox_pred)
+
+# model.roi_heads.box_head.fc6 = torch.nn.Sequential(
+#     # model.roi_heads.box_head.fc6, torch.nn.Dropout(p=.2))
+# model.roi_heads.box_head.fc7 = torch.nn.Sequential(
+#     model.roi_heads.box_head.fc7, torch.nn.Dropout(p=.2))
+
+# model.backbone.fpn.layer_blocks[1] = torch.nn.Sequential(
+#     model.backbone.fpn.layer_blocks[1], torch.nn.Dropout2d(p=1))
 
 model.to(device)
 # model = torch.nn.parallel.DataParallel(model, device_ids=[0, 1])
@@ -142,7 +164,7 @@ model.to(device)
 print(model)
 
 # %%
-writer = SummaryWriter(comment="fasterrcnn_voc")
+writer = SummaryWriter(comment=EXPERIMENT_NAME)
 
 
 def bbox_dict_to_tensor(pred: dict):
@@ -153,10 +175,10 @@ def bbox_dict_to_tensor(pred: dict):
 
 
 def train_model(model, num_epochs, optimizer, data_loaders, device, save_model_filename=None):
+    max_ap = 0
     for epoch in range(num_epochs):
         print(f'Epoch {epoch+1}/{num_epochs}', flush=True)
         print('-' * 10, flush=True)
-        max_ap = 0
         for phase in ["train", 'val']:
             if phase == 'train':
                 model.train()  # Set model to training mode
@@ -221,10 +243,9 @@ def train_model(model, num_epochs, optimizer, data_loaders, device, save_model_f
                 writer.add_scalar(f"Train loss", np.mean(epoch_losses), epoch)
 
 
-params = list(model.backbone.fpn.parameters()) + \
-    list(model.rpn.parameters()) + list(model.roi_heads.parameters())
-optimizer = torch.optim.Adam(params)
+params = [p for p in model.parameters() if p.requires_grad]
+optimizer = torch.optim.Adam(model.roi_heads.box_predictor.parameters())
 train_progress = train_model(
-    model, 50, optimizer, {"train": data_loader_train, "val": data_loader_test}, device, "checkpoints/fasterrcnn_voc.pt")
+    model, 50, optimizer, {"train": data_loader_train, "val": data_loader_test}, device, f"checkpoints/{EXPERIMENT_NAME}.pt")
 
 # %%
