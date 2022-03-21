@@ -2,7 +2,7 @@ from collections import Counter
 import torch
 
 
-def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
+def intersection_over_union(boxes_preds, boxes_labels):
     """
     Calculates intersection over union
     Parameters:
@@ -16,25 +16,14 @@ def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
     # Slicing idx:idx+1 in order to keep tensor dimensionality
     # Doing ... in indexing if there would be additional dimensions
     # Like for Yolo algorithm which would have (N, S, S, 4) in shape
-    if box_format == "midpoint":
-        box1_x1 = boxes_preds[..., 0:1] - boxes_preds[..., 2:3] / 2
-        box1_y1 = boxes_preds[..., 1:2] - boxes_preds[..., 3:4] / 2
-        box1_x2 = boxes_preds[..., 0:1] + boxes_preds[..., 2:3] / 2
-        box1_y2 = boxes_preds[..., 1:2] + boxes_preds[..., 3:4] / 2
-        box2_x1 = boxes_labels[..., 0:1] - boxes_labels[..., 2:3] / 2
-        box2_y1 = boxes_labels[..., 1:2] - boxes_labels[..., 3:4] / 2
-        box2_x2 = boxes_labels[..., 0:1] + boxes_labels[..., 2:3] / 2
-        box2_y2 = boxes_labels[..., 1:2] + boxes_labels[..., 3:4] / 2
-
-    elif box_format == "corners":
-        box1_x1 = boxes_preds[..., 0:1]
-        box1_y1 = boxes_preds[..., 1:2]
-        box1_x2 = boxes_preds[..., 2:3]
-        box1_y2 = boxes_preds[..., 3:4]
-        box2_x1 = boxes_labels[..., 0:1]
-        box2_y1 = boxes_labels[..., 1:2]
-        box2_x2 = boxes_labels[..., 2:3]
-        box2_y2 = boxes_labels[..., 3:4]
+    box1_x1 = boxes_preds[..., 0:1]
+    box1_y1 = boxes_preds[..., 1:2]
+    box1_x2 = boxes_preds[..., 2:3]
+    box1_y2 = boxes_preds[..., 3:4]
+    box2_x1 = boxes_labels[..., 0:1]
+    box2_y1 = boxes_labels[..., 1:2]
+    box2_x2 = boxes_labels[..., 2:3]
+    box2_y2 = boxes_labels[..., 3:4]
 
     x1 = torch.max(box1_x1, box2_x1)
     y1 = torch.max(box1_y1, box2_y1)
@@ -50,7 +39,7 @@ def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
 
 
 def mean_average_precision(
-    pred_boxes, true_boxes, iou_threshold=0.5, box_format="midpoint", num_classes=20
+    pred_boxes, true_boxes, iou_threshold=0.5, num_classes=20
 ):
     """
     Calculates mean average precision 
@@ -122,8 +111,7 @@ def mean_average_precision(
             for idx, gt in enumerate(ground_truth_img):
                 iou = intersection_over_union(
                     torch.tensor(detection[3:]),
-                    torch.tensor(gt[3:]),
-                    box_format=box_format,
+                    torch.tensor(gt[3:])
                 )
 
                 if iou > best_iou:
@@ -155,7 +143,7 @@ def mean_average_precision(
     return sum(average_precisions) / len(average_precisions)
 
 
-def nms(bboxes, iou_threshold, threshold, box_format="corners"):
+def nms(bboxes, iou_threshold, threshold):
     """
     Does Non Max Suppression given bboxes
     Parameters:
@@ -183,8 +171,7 @@ def nms(bboxes, iou_threshold, threshold, box_format="corners"):
             if box[0] != chosen_box[0]
             or intersection_over_union(
                 torch.tensor(chosen_box[2:]),
-                torch.tensor(box[2:]),
-                box_format=box_format,
+                torch.tensor(box[2:])
             )
             < iou_threshold
         ]
