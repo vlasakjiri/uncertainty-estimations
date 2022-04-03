@@ -75,8 +75,8 @@ class LeNet5_dropout(nn.Module):
 
         self.classifier = nn.Sequential(
             nn.Linear(in_features=120, out_features=84),
-            nn.Dropout(p_dropout),
             nn.Tanh(),
+            nn.Dropout(p_dropout),
             nn.Linear(in_features=84, out_features=n_classes),
         )
 

@@ -73,6 +73,7 @@ class Progress:
         self.dropout_outputs = []
         self.dropout_variances = np.array([])
         self.dropout_predictions = np.array([])
+        self.dropout_max_probs = np.array([])
 
     def update(self, preds, labels, probs, logits):
         self.logits.append(logits.numpy())
@@ -89,6 +90,8 @@ class Progress:
         mc_predictions = mc_means.argmax(axis=-1)
         self.dropout_nlls.append(nll.numpy())
         self.dropout_outputs.append(mc_means.numpy())
+        self.dropout_max_probs = np.append(
+            self.dropout_max_probs, mc_means.numpy().max(axis=-1))
         self.dropout_predictions = np.append(
             self.dropout_predictions, mc_predictions)
         self.dropout_variances = np.append(

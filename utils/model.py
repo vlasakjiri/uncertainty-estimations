@@ -9,14 +9,9 @@ from utils.metrics import Progress, normalized_entropy
 
 def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, save_model_filename=None, writer=None):
     softmax = nn.Softmax(dim=1)
-    precision_holder = []
     min_val_loss = 10000
     model.to(device)
     for epoch in range(num_epochs):
-        precision_holder.append({
-            "train": Progress(),
-            "val": Progress()
-        })
         print(f'Epoch {epoch+1}/{num_epochs}', flush=True)
         print('-' * 10, flush=True)
         for phase in ['train', 'val']:
@@ -30,12 +25,12 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
             running_entropy = 0.0
             running_maxes = 0.0
             count = 0
+            # progress_bar = data_loaders[phase]
             progress_bar = tqdm(data_loaders[phase])
             for inputs, labels in progress_bar:
                 inputs = inputs.to(device)
                 labels = labels.to(device)
                 count += len(labels)
-                current_holder = precision_holder[epoch][phase]
                 optimizer.zero_grad()
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
@@ -53,8 +48,6 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                 running_entropy += np.sum(1 -
                                           normalized_entropy(probs.detach().cpu(), axis=1))
                 running_maxes += torch.sum(torch.max(probs, dim=1)[0])
-                current_holder = current_holder.update(
-                    preds.cpu(), labels.cpu(), probs.cpu(), outputs.detach().cpu())
 
                 epoch_loss = running_loss / count
                 epoch_acc = running_corrects.double() / count
@@ -62,6 +55,7 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                 epoch_avg_max = running_maxes / count
                 progress_str = f'{phase} Loss: {epoch_loss:.2f} Acc: {epoch_acc:.2f} Avg. conf: {epoch_entropy:.2f} Avg. max. prob: {epoch_avg_max:.2f}'
                 progress_bar.set_description(progress_str)
+            # print(progress_str, flush=True)
             if writer:
                 writer.add_scalar(f"Acc/{phase}", epoch_acc, epoch)
                 writer.add_scalar(f"Loss/{phase}", epoch_loss, epoch)
@@ -69,7 +63,6 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                 min_val_loss = epoch_loss
                 torch.save(model, save_model_filename)
                 print(f"Checkpoint with val_loss = {epoch_loss:.2f} saved.")
-    return precision_holder
 
 
 def run_validation(model, data_loader, test_progress: Progress, device, mc_dropout_iters=0):
