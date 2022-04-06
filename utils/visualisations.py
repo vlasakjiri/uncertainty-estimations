@@ -62,7 +62,7 @@ def calibration_graph(label_idx_list, labels_in, **kwargs):
         ax.plot(np.linspace(0, 1, len(bins)),
                 np.linspace(0, 1, len(bins)), "k--")
 
-        ax.annotate(f"ECE: {ece:.2f}%", (0, 0.8), fontsize=15)
+        ax.annotate(f"ECE: {ece:.2f}%", (0, 0.7), fontsize=15)
         ax.set_title(label)
         ax.set_xlabel("Confidence")
         ax.set_ylabel("Accuracy")
