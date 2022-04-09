@@ -1,5 +1,6 @@
 # %%
 
+from torchensemble import VotingClassifier
 from xml.etree.ElementTree import Comment
 import sklearn.metrics as metrics
 from utils.temperature_scaling import ModelWithTemperature
@@ -70,10 +71,37 @@ data_loaders = {"train": data_loader_train,
                 "val": data_loader_test}
 
 # %%
+
+model = models.mobilenet_v2.MobileNetV2(
+    num_classes=100, stem_stride=1).to(device)
+
+
+ensemble = VotingClassifier(
+    estimator=model,               # here is your deep learning model
+    n_estimators=5,                        # number of base estimators
+)
+# Set the criterion
+criterion = nn.CrossEntropyLoss()           # training objective
+ensemble.set_criterion(criterion)
+
+# Set the optimizer
+ensemble.set_optimizer(
+    "Adam",                                 # type of parameter optimizer
+)
+
+
+# Train the ensemble
+ensemble.fit(
+    data_loader_train,
+    epochs=50,                          # number of training epochs
+    save_model=True,
+    save_dir='checkpoints'
+)
+
 # model = models.resnet_dropout.ResNet18Dropout(100, p=0.1).to(device)
 
-model = models.mobilenet_v2.MobileNetV2Dropout(
-    num_classes=100, stem_stride=1, p_dropout=0.2).to(device)
+# model = models.mobilenet_v2.MobileNetV2Dropout(
+#     num_classes=100, stem_stride=1, p_dropout=0.2).to(device)
 
 # model = torch.load("models/cifar100_resnet18_train_val_split")
 # model_dropout = torch.load("models/cifar100_resnet18_0.2dropout_all")
@@ -83,11 +111,11 @@ model = models.mobilenet_v2.MobileNetV2Dropout(
 # %%
 # model = models.resnet.ResNet18(
 #     num_classes=100).to(device)
-print(model)
-optimizer = torch.optim.Adam(model.parameters())
-criterion = nn.CrossEntropyLoss()
-train_progress = utils.model.train_model(
-    model, 200, optimizer, criterion, data_loaders, device, "checkpoints/cifar100_mobilenetv2_dropout.pt", SummaryWriter(comment="cifar100_mobilenetv2_dropout"))
+# print(model)
+# optimizer = torch.optim.Adam(model.parameters())
+# criterion = nn.CrossEntropyLoss()
+# train_progress = utils.model.train_model(
+#     model, 200, optimizer, criterion, data_loaders, device, "checkpoints/cifar100_mobilenetv2_dropout.pt", SummaryWriter(comment="cifar100_mobilenetv2_dropout"))
 
 # %%
 # torch.save(model, "models/cifar100_mobilenetv2_train_val_split")
