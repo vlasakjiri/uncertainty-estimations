@@ -40,7 +40,7 @@ def compute_model_stats(correct, max_probs, label):
     }
 
 
-def update_model_metrics(progress, probs, max_probs, predictions, labels, bins, m: model_metrics(), strength):
+def update_model_metrics(probs, max_probs, predictions, labels, bins, m: model_metrics(), strength):
     accs, errors, counts = compute_calibration_metrics(
         predictions, labels, max_probs, np.argsort(max_probs), bins)
     ece = np.average(errors, weights=counts) * 100
@@ -48,14 +48,15 @@ def update_model_metrics(progress, probs, max_probs, predictions, labels, bins, 
     mean_confidence = np.mean(max_probs)
 
     y_true = torch.nn.functional.one_hot(torch.tensor(labels.astype("long")))
-    brier = compute_brier_score_avg(probs, y_true)
-
     correct = predictions == labels
     curve = compute_model_stats(correct, max_probs, "dasd")
+    if probs is not None:
+        brier = compute_brier_score_avg(probs, y_true)
+        m.brier.append(brier)
+
     m.acc.append(mean_acc)
     m.ece.append(ece)
     m.confs.append(mean_confidence)
-    m.brier.append(brier)
     m.auroc.append(curve["auroc"])
     m.aupr.append(curve["aupr"])
     m.strengths.append(strength)

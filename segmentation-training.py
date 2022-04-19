@@ -92,6 +92,9 @@ data_loaders = {"train": data_loader_train, "val": data_loader_test}
 
 model = torchvision.models.segmentation.deeplabv3_resnet50(
     pretrained=True)
+
+for i in range(4):
+    model.classifier[0].convs[i][2]=torch.nn.Sequential(torch.nn.ReLU(), torch.nn.Dropout2d(p=0.1))
 # model = models.unet_model.UNet(3, 21)
 # utils.mc_dropout.set_dropout_p(model, model, .25)
 
@@ -111,7 +114,7 @@ def add_dropout(model, block, prob, omitted_blocks=[]):
 
 #             # return model
 # add_dropout(model.backbone.layer3, model.backbone.layer3, 0.2)
-add_dropout(model.backbone.layer4, model.backbone.layer4, 0.2)
+# add_dropout(model.backbone.layer4, model.backbone.layer4, 0.2)
 
 # model.classifier[0].project[2] = torch.nn.ReLU()
 # model.classifier[3] = torch.nn.ReLU()
@@ -127,7 +130,7 @@ print(model)
 model.to(device)
 
 # %%
-writer = SummaryWriter(comment="deeplab_resnet_finetune")
+writer = SummaryWriter(comment="deeplab_resnet_finetune_cls_dropout")
 
 
 def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, save_model_filename=None):
@@ -201,7 +204,7 @@ weights = torch.tensor(
     utils.model.compute_segmentation_loss_weights(data_train, 21)).to(torch.float)
 criterion = nn.CrossEntropyLoss().to(device)
 train_progress = train_model(
-    model, 20, optimizer, criterion, data_loaders, device, "checkpoints/deeplab_resnet_finetune.pt")
+    model, 20, optimizer, criterion, data_loaders, device, "checkpoints/deeplab_resnet_finetune_cls_dropout.pt")
 
 # torch.save(model, "models/VOC_segmentation_unet")
 
