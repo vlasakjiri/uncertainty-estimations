@@ -87,16 +87,11 @@ data_loaders = {"train": data_loader_train, "val": data_loader_test}
 
 
 # %%
-# model = torchvision.models.segmentation._deeplabv3_resnet(
-#     models.resnet.ResNet18(None), 21)
 
 model = torchvision.models.segmentation.deeplabv3_resnet50(
     pretrained=True)
 
-for i in range(4):
-    model.classifier[0].convs[i][2]=torch.nn.Sequential(torch.nn.ReLU(), torch.nn.Dropout2d(p=0.1))
-# model = models.unet_model.UNet(3, 21)
-# utils.mc_dropout.set_dropout_p(model, model, .25)
+
 
 
 # %%

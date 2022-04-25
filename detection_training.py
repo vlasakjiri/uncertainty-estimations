@@ -1,4 +1,5 @@
 # %%
+from pickletools import optimize
 import pprint
 from typing import OrderedDict
 
@@ -25,7 +26,7 @@ import utils.visualisations
 from utils.temperature_scaling import ModelWithTemperature
 
 # %%
-EXPERIMENT_NAME = "faster_rcnn_box_predictor_dropout0.5"
+EXPERIMENT_NAME = "ssd_from_scratch"
 
 
 # setting device on GPU if available, else CPU
@@ -115,7 +116,7 @@ target_transforms = torchvision.transforms.Compose([
 data_train = torchvision.datasets.VOCDetection(
     root="VOC", download=True, image_set="train", transform=transforms_train, target_transform=VOCTransform())
 data_loader_train = torch.utils.data.DataLoader(data_train,
-                                                batch_size=16,
+                                                batch_size=8,
                                                 shuffle=True,
                                                 collate_fn=collate_fn)
 
@@ -132,23 +133,23 @@ data_loader_test = torch.utils.data.DataLoader(data_test,
 
 
 # %%
-# model = torchvision.models.detection.ssd300_vgg16(
-#     pretrained=True, trainable_backbone_layers=0)
+model = torchvision.models.detection.ssd300_vgg16(
+    pretrained=False, pretrained_backbone=True, num_classes=len(VOC_CLASSES))
 
 # model.head = torchvision.models.detection.ssd.SSDHead(
 #     [512, 1024, 512, 256, 256, 256], [4, 6, 6, 6, 4, 4], 21)
-model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_fpn(
-    pretrained=True, trainable_backbone_layers=0)
-num_classes = len(VOC_CLASSES)
-in_features = model.roi_heads.box_predictor.cls_score.in_features
-model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+# model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_fpn(
+#     pretrained=True, trainable_backbone_layers=0)
+# num_classes = len(VOC_CLASSES)
+# in_features = model.roi_heads.box_predictor.cls_score.in_features
+# model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
 
-model.roi_heads.box_predictor.cls_score = torch.nn.Sequential(torch.nn.Dropout(p=.5),
-                                                              model.roi_heads.box_predictor.cls_score)
+# model.roi_heads.box_predictor.cls_score = torch.nn.Sequential(torch.nn.Dropout(p=.5),
+#                                                               model.roi_heads.box_predictor.cls_score)
 
-model.roi_heads.box_predictor.bbox_pred = torch.nn.Sequential(torch.nn.Dropout(p=.5),
-                                                              model.roi_heads.box_predictor.bbox_pred)
+# model.roi_heads.box_predictor.bbox_pred = torch.nn.Sequential(torch.nn.Dropout(p=.5),
+#                                                               model.roi_heads.box_predictor.bbox_pred)
 
 # model.roi_heads.box_head.fc6 = torch.nn.Sequential(
 #     # model.roi_heads.box_head.fc6, torch.nn.Dropout(p=.2))
@@ -210,14 +211,13 @@ def train_model(model, num_epochs, optimizer, data_loaders, device, save_model_f
                     for idx, pred in enumerate(out):
                         bboxes = bbox_dict_to_tensor(pred)
                         true_bboxes = bbox_dict_to_tensor(targets[idx])
-                        nms_boxes = utils.detection_metrics.nms(
-                            bboxes,
-                            iou_threshold=0.5,
-                            threshold=0.5,
-                            box_format="corners",
-                        )
+                        # nms_boxes = utils.detection_metrics.nms(
+                        #     bboxes,
+                        #     iou_threshold=0.5,
+                        #     threshold=0.5,
+                        # )
 
-                        for nms_box in nms_boxes:
+                        for nms_box in bboxes:
                             all_pred_boxes.append([train_idx] + nms_box)
 
                         for box in true_bboxes:
@@ -227,9 +227,9 @@ def train_model(model, num_epochs, optimizer, data_loaders, device, save_model_f
                         train_idx += 1
             if phase == "val":
                 AP_50 = utils.detection_metrics.mean_average_precision(
-                    all_pred_boxes, all_true_boxes, iou_threshold=0.5, box_format="corners", num_classes=21)
+                    all_pred_boxes, all_true_boxes, iou_threshold=0.5, num_classes=21)
                 AP_75 = utils.detection_metrics.mean_average_precision(
-                    all_pred_boxes, all_true_boxes, iou_threshold=0.75, box_format="corners", num_classes=21)
+                    all_pred_boxes, all_true_boxes, iou_threshold=0.75, num_classes=21)
                 print(f'{phase} AP 50: {AP_50:.2f} AP 75: {AP_75:.2f}')
                 writer.add_scalar(f"AP 50", AP_50, epoch)
                 writer.add_scalar(f"AP 75", AP_75, epoch)
@@ -244,8 +244,10 @@ def train_model(model, num_epochs, optimizer, data_loaders, device, save_model_f
 
 
 params = [p for p in model.parameters() if p.requires_grad]
-optimizer = torch.optim.Adam(model.roi_heads.box_predictor.parameters())
+# optimizer = torch.optim.Adam(model.roi_heads.box_predictor.parameters())
+# optimizer = torch.optim.SGD(params, 5e-4, 0.9, 5e-4)
+optimizer = torch.optim.Adam(params)
 train_progress = train_model(
-    model, 50, optimizer, {"train": data_loader_train, "val": data_loader_test}, device, f"checkpoints/{EXPERIMENT_NAME}.pt")
+    model, 150, optimizer, {"train": data_loader_train, "val": data_loader_test}, device, f"checkpoints/{EXPERIMENT_NAME}.pt")
 
 # %%
