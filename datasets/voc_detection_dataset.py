@@ -11,7 +11,7 @@ class PascalVOCDataset(Dataset):
     A PyTorch Dataset class to be used in a PyTorch DataLoader to create batches.
     """
 
-    def __init__(self, data_folder, split, keep_difficult=False):
+    def __init__(self, data_folder, split, keep_difficult=False, transforms=None):
         """
         :param data_folder: folder where data files are stored
         :param split: split, one of 'TRAIN' or 'TEST'
@@ -23,6 +23,7 @@ class PascalVOCDataset(Dataset):
 
         self.data_folder = data_folder
         self.keep_difficult = keep_difficult
+        self.transforms = transforms
 
         # Read data files
         with open(os.path.join(data_folder, self.split + '_images.json'), 'r') as j:
@@ -48,6 +49,9 @@ class PascalVOCDataset(Dataset):
             boxes = boxes[1 - difficulties]
             labels = labels[1 - difficulties]
             difficulties = difficulties[1 - difficulties]
+
+        if self.transforms:
+            image = self.transforms(image)
 
         # Apply transformations
         image, boxes, labels, difficulties = transform(
