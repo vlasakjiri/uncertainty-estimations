@@ -132,16 +132,3 @@ def ResNet101Dropout(num_classes, p=0.2):
 def ResNet152Dropout(num_classes, p=0.2):
     return ResNetDropout(Bottleneck, [3, 8, 36, 3], num_classes=num_classes, p=p)
 
-
-def test():
-    net = ResNet18Dropout()
-    y = net(torch.randn(1, 3, 32, 32))
-    print(y.size())
-    with open("resnet_dropout.txt", "w") as f:
-        f.write(str(net))
-
-
-if __name__ == "__main__":
-    test()
-
-# test()

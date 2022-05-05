@@ -2,24 +2,6 @@ import torch.nn as nn
 import torch
 
 
-class MLP(nn.Module):
-    def __init__(self, p_dropout):
-        super(MLP, self).__init__()
-        self.flatten = nn.Flatten()
-        self.linear_relu_stack = nn.Sequential(
-            nn.Linear(28*28, 512),
-            nn.ReLU(),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Dropout(p=p_dropout),
-            nn.Linear(256, 10),
-        )
-
-    def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
-        return logits
-
 
 class LeNet5(nn.Module):
 

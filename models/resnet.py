@@ -125,16 +125,3 @@ def ResNet101(num_classes):
 def ResNet152(num_classes):
     return ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes)
 
-
-def test():
-    net = ResNet18()
-    y = net(torch.randn(1, 3, 32, 32))
-    print(y.size())
-    print(net)
-    with open("resnet.txt", "w") as f:
-        f.write(str(net))
-
-
-# test()
-if __name__ == "__main__":
-    test()

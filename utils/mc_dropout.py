@@ -29,9 +29,6 @@ def set_dropout_p(model, block, prob, omitted_blocks=[]):
         elif isinstance(p, torch.nn.Dropout2d):
             setattr(block, name, torch.nn.Dropout2d(p=prob))
             return model
-            # bn = torch.nn.BatchNorm2d(p.num_features)
-            # bn.load_state_dict(p.state_dict())
-            # setattr(block, name, bn)
 
 
 def mc_dropout(model, X, output_shape, T=40):
@@ -64,10 +61,3 @@ def add_dropout(model, block, prob, add_after=torch.nn.ReLU, dropout_cls=torch.n
         if isinstance(p, add_after):
             setattr(block, name, torch.nn.Sequential(
                 add_after(), dropout_cls(p=prob)))
-
-
-def compute_log_likelihood(y_pred, y_true, sigma):
-    dist = torch.distributions.normal.Normal(loc=y_pred, scale=sigma)
-    log_likelihood = dist.log_prob(y_true)
-    log_likelihood = torch.mean(log_likelihood, dim=1)
-    return log_likelihood
