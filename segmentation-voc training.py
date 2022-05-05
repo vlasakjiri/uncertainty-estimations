@@ -1,46 +1,50 @@
-# %%
-
 from typing import OrderedDict
-import torchmetrics
-from tqdm import tqdm
-import sklearn.metrics as metrics
-from utils.temperature_scaling import ModelWithTemperature
-from matplotlib import pyplot as plt
-import utils.visualisations
+
 import numpy as np
 import torch
 import torch.nn as nn
-import torchvision.models
 import torchvision.datasets
-import torchvision.transforms as transforms
+import torchvision.models
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 import utils.metrics
 import utils.model
+import utils.visualisations
 
-import models.unet_model
-import models.resnet
-import models.deeplabv3
 
-# %%
+# set the name of the experiment (used to save checkpoints and log data with tensorboard)
+EXPERIMENT_NAME = "voc_segmentation_deeplab_resnet50"
+
 # setting device on GPU if available, else CPU
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-# device = torch.device("cpu")
 print('Using device:', device)
-print()
 
-# Additional Info when using cuda
-if device.type == 'cuda':
-    print(torch.cuda.get_device_name(0))
-    print('Memory Usage:')
-    print('Allocated:', round(torch.cuda.memory_allocated(0)/1024**3, 1), 'GB')
-    print('Cached:   ', round(torch.cuda.memory_reserved(0)/1024**3, 1), 'GB')
 
-# %%
+def add_dropout(model, block, prob, omitted_blocks=[]):
+    for name, p in block.named_children():
+        if any(map(lambda x: isinstance(p, x), omitted_blocks)):
+            continue
+        if isinstance(p, torch.nn.Module) or isinstance(p, torch.nn.Sequential):
+            add_dropout(model, p, prob, omitted_blocks)
+
+        if isinstance(p, torch.nn.ReLU):
+            setattr(block, name, torch.nn.Sequential(
+                torch.nn.ReLU(), torch.nn.Dropout2d(p=prob)))
+
+
+model = torchvision.models.segmentation.deeplabv3_resnet50(
+    pretrained=True).to(device)
+
+# Uncomment to add dropout layers
+# add_dropout(model.backbone.layer3, model.backbone.layer3, 0.2)
+# add_dropout(model.backbone.layer4, model.backbone.layer4, 0.2)
+
+print(model)
 
 
 class VOCTransform(object):
-    """Convert ndarrays in sample to Tensors."""
+    """Convert the area close to object boundaries to background. It is a special class by default."""
 
     def __call__(self, labels):
         labels = (labels * 255).squeeze(0).to(torch.long)
@@ -62,8 +66,12 @@ target_transforms = torchvision.transforms.Compose([
     torchvision.transforms.ToTensor(),
     VOCTransform()
 ])
+
+# use batchsize of 32 but accumulate grad through 64 samples. Basically like using batchsize of 64 but using less memory.
 effective_batchsize = 64
 batchsize = 32
+
+
 data_train = torchvision.datasets.VOCSegmentation(
     root="VOC", download=True, image_set="train", transform=transforms_normalized, target_transform=target_transforms)
 
@@ -86,46 +94,7 @@ dataset_sizes = {"train": len(data_train), "val": len(data_test)}
 data_loaders = {"train": data_loader_train, "val": data_loader_test}
 
 
-# %%
-
-model = torchvision.models.segmentation.deeplabv3_resnet50(
-    pretrained=True)
-
-
-
-
-# %%
-def add_dropout(model, block, prob, omitted_blocks=[]):
-    for name, p in block.named_children():
-        if any(map(lambda x: isinstance(p, x), omitted_blocks)):
-            continue
-        if isinstance(p, torch.nn.Module) or isinstance(p, torch.nn.Sequential):
-            add_dropout(model, p, prob, omitted_blocks)
-
-        if isinstance(p, torch.nn.ReLU):
-            setattr(block, name, torch.nn.Sequential(
-                torch.nn.ReLU(), torch.nn.Dropout2d(p=prob)))
-
-
-#             # return model
-# add_dropout(model.backbone.layer3, model.backbone.layer3, 0.2)
-# add_dropout(model.backbone.layer4, model.backbone.layer4, 0.2)
-
-# model.classifier[0].project[2] = torch.nn.ReLU()
-# model.classifier[3] = torch.nn.ReLU()
-# model.aux_classifier[2] = torch.nn.ReLU()
-# backbone = torchvision.models.resnet50(
-#     pretrained=False, replace_stride_with_dilation=[False, True, True])
-
-# model = models.deeplabv3.deeplabv3_resnet(backbone, 21, False)
-
-print(model)
-
-# %%
-model.to(device)
-
-# %%
-writer = SummaryWriter(comment="deeplab_resnet_finetune_cls_dropout")
+writer = SummaryWriter(comment=EXPERIMENT_NAME)
 
 
 def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, save_model_filename=None):
@@ -166,7 +135,6 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                         optimizer.zero_grad()
 
                 probs = softmax(outputs).detach()
-                # statistics
                 running_corrects += torch.sum(preds == labels.data)
                 running_maxes += torch.sum(torch.max(probs, dim=1)[0])
 
@@ -176,7 +144,6 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                 epoch_iou = np.mean(ious)
                 epoch_loss = np.mean(losses)
                 epoch_acc = running_corrects.double() / numel
-                # epoch_entropy = running_entropy / count
                 epoch_avg_max = running_maxes / numel
                 progress_str = f'{phase} Loss: {epoch_loss:.2f} Acc: {epoch_acc:.2f} IOU: {epoch_iou:.2f} Avg. max. prob: {epoch_avg_max:.2f}'
                 progress_bar.set_description(progress_str)
@@ -184,9 +151,6 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
             writer.add_scalar(f"Loss/{phase}", epoch_loss, epoch)
             writer.add_scalar(f"IOU/{phase}", epoch_iou, epoch)
 
-            # iou = torchmetrics.functional.jaccard_index(preds, labels).item()
-            # print(iou)
-            # print(loss)
             if phase == "val" and epoch_loss < min_val_loss and save_model_filename is not None:
                 min_val_loss = epoch_loss
                 torch.save(model, save_model_filename)
@@ -195,12 +159,6 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
 
 
 optimizer = torch.optim.Adam(model.classifier.parameters())
-weights = torch.tensor(
-    utils.model.compute_segmentation_loss_weights(data_train, 21)).to(torch.float)
 criterion = nn.CrossEntropyLoss().to(device)
 train_progress = train_model(
-    model, 20, optimizer, criterion, data_loaders, device, "checkpoints/deeplab_resnet_finetune_cls_dropout.pt")
-
-# torch.save(model, "models/VOC_segmentation_unet")
-
-# %%
+    model, 20, optimizer, criterion, data_loaders, device, f"checkpoints/{EXPERIMENT_NAME}.pt")
