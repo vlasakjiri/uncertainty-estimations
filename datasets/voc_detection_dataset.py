@@ -4,6 +4,8 @@ import json
 import os
 from PIL import Image
 from utils.detection_utils import transform
+from torchvision.datasets import VOCDetection
+from utils.detection_utils import create_data_lists
 
 
 class PascalVOCDataset(Dataset):
@@ -11,12 +13,19 @@ class PascalVOCDataset(Dataset):
     A PyTorch Dataset class to be used in a PyTorch DataLoader to create batches.
     """
 
-    def __init__(self, data_folder, split, keep_difficult=False, transforms=None):
+    def __init__(self, data_folder, split, download=True, keep_difficult=False, transforms=None):
         """
         :param data_folder: folder where data files are stored
         :param split: split, one of 'TRAIN' or 'TEST'
         :param keep_difficult: keep or discard objects that are considered difficult to detect?
         """
+        if download:
+            VOCDetection(data_folder, "2012", "trainval", download=True)
+            VOCDetection(data_folder, "2007", "trainval", download=True)
+            VOCDetection(data_folder, "2007", "test", download=True)
+            create_data_lists(os.path.join(data_folder, "VOCdevkit", "VOC2007"), os.path.join(
+                data_folder, "VOCdevkit", "VOC2012"), data_folder)
+
         self.split = split.upper()
 
         assert self.split in {'TRAIN', 'TEST'}
