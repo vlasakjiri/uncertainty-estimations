@@ -65,6 +65,65 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                 print(f"Checkpoint with val_loss = {epoch_loss:.2f} saved.")
 
 
+def train_unet_model(model, num_epochs, optimizer, criterion, data_loaders, device, save_model_filename=None):
+    softmax = nn.Softmax(dim=1)
+    model.to(device)
+    max_iou = 0
+    for epoch in range(num_epochs):
+        print(f'Epoch {epoch+1}/{num_epochs}', flush=True)
+        print('-' * 10, flush=True)
+        for phase in ['train', 'val']:
+            if phase == 'train':
+                model.train()  # Set model to training mode
+            else:
+                model.eval()   # Set model to evaluate mode
+            running_corrects = 0
+            running_maxes = 0.0
+            losses = []
+            ious = []
+            numel = 0
+            progress_bar = tqdm(data_loaders[phase])
+            optimizer.zero_grad()
+            for i, (inputs, labels) in enumerate(progress_bar):
+                inputs = inputs.to(device)
+                labels = labels.to(device)
+                numel += labels.numel()
+                # track history if only in train
+                with torch.set_grad_enabled(phase == 'train'):
+                    outputs = model(inputs)
+                _, preds = torch.max(outputs, 1)
+                loss = criterion(outputs, labels)
+                if phase == 'train':
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+                probs = softmax(outputs).detach()
+                # statistics
+                running_corrects += torch.sum(preds == labels.data)
+                running_maxes += torch.sum(torch.max(probs, dim=1)[0])
+
+                losses.append(loss.item())
+                iou = utils.metrics.iou(preds, labels, 4).item()
+                ious.append(iou)
+                epoch_iou = np.mean(ious)
+                epoch_loss = np.mean(losses)
+                epoch_acc = running_corrects.double() / numel
+                # epoch_entropy = running_entropy / count
+                epoch_avg_max = running_maxes / numel
+                progress_str = f'{phase} Loss: {epoch_loss:.2f} Acc: {epoch_acc:.2f} IOU: {epoch_iou:.2f} Avg. max. prob: {epoch_avg_max:.2f}'
+                progress_bar.set_description(progress_str)
+            writer.add_scalar(f"Acc/{phase}", epoch_acc, epoch)
+            writer.add_scalar(f"Loss/{phase}", epoch_loss, epoch)
+            writer.add_scalar(f"IOU/{phase}", epoch_iou, epoch)
+
+            if phase == "val" and epoch_iou > max_iou and save_model_filename is not None:
+                max_iou = epoch_iou
+                torch.save(model, save_model_filename)
+                print(
+                    f"Checkpoint with val IOU = {epoch_iou:.3f} saved.")
+
+
 def run_validation(model, data_loader, test_progress: Progress, device, mc_dropout_iters=0):
     softmax = nn.Softmax(dim=1)
     progress_bar = tqdm(data_loader)

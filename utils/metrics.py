@@ -99,7 +99,7 @@ class Progress:
             self.dropout_variances, mc_var)
 
 
-def __str__(self) -> str:
+def __repr__(self) -> str:
     return f"Predictions: {self.predictions}\nLabels: {self.labels}\nMax probs: {self.max_probs}\n Confidences: {self.confidences}"
 
 
