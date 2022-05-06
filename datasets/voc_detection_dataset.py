@@ -1,3 +1,6 @@
+# Pytorch dataset for the PASCAL-VOC detection dataset
+# taken from https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Object-Detection 
+
 import torch
 from torch.utils.data import Dataset
 import json

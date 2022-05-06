@@ -1,3 +1,6 @@
+# SSD300 model
+# taken from https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Object-Detection 
+
 from torch import nn
 from utils.detection_utils import *
 import torch

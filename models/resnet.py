@@ -1,6 +1,7 @@
-'''ResNet in PyTorch.
+# ResNet models
+# taken from https://github.com/mattiasegu/uncertainty_estimation_deep_learning
 
-For Pre-activation ResNet, see 'preact_resnet.py'.
+'''ResNet in PyTorch.
 
 Reference:
 [1] Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun
@@ -124,4 +125,3 @@ def ResNet101(num_classes):
 
 def ResNet152(num_classes):
     return ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes)
-

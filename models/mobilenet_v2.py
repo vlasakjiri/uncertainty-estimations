@@ -1,3 +1,6 @@
+# The MobileNetV2 model
+# taken from https://github.com/NoUnique/MobileNet-CIFAR100.pytorch
+
 # MobileNetV2 is adopted from torchvision
 # (https://github.com/pytorch/vision/blob/master/torchvision/models/mobilenet.py)
 # Modified block decoder is adopted from official code of EfficientNet

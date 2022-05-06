@@ -1,3 +1,5 @@
+# Pytorch dataset for the MedSeg Covid19 dataset.
+
 import torch
 import os
 import cv2

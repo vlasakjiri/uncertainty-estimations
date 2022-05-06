@@ -1,3 +1,6 @@
+# ResNet models with dropout
+# taken from https://github.com/mattiasegu/uncertainty_estimation_deep_learning
+
 '''ResNet in PyTorch.
 
 Reference:

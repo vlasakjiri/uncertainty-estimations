@@ -1,6 +1,7 @@
+# LeNet-5 and LeNet-5 dropout models
+
 import torch.nn as nn
 import torch
-
 
 
 class LeNet5(nn.Module):
