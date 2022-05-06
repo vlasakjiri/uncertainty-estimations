@@ -16,7 +16,7 @@ class PascalVOCDataset(Dataset):
     A PyTorch Dataset class to be used in a PyTorch DataLoader to create batches.
     """
 
-    def __init__(self, data_folder, split, download=True, keep_difficult=False, transforms=None):
+    def __init__(self, data_folder, split, download=False, keep_difficult=False, transforms=None):
         """
         :param data_folder: folder where data files are stored
         :param split: split, one of 'TRAIN' or 'TEST'

@@ -15,7 +15,7 @@ print('Using device:', device)
 
 # %%
 # set the model architecture
-model = models.mnist.LeNet5(n_channels=1)
+model = models.lenet.LeNet5(n_channels=1)
 
 # %%
 transforms = torchvision.transforms.Compose([torchvision.transforms.Resize((32, 32)),
@@ -58,6 +58,7 @@ data_loaders = {"train": data_loader_train, "val": data_loader_test}
 ensemble = VotingClassifier(
     estimator=model,               # here is your deep learning model
     n_estimators=5,                        # number of base estimators
+    cuda=device.type=="cuda"
 )
 # Set the criterion
 criterion = nn.CrossEntropyLoss()           # training objective

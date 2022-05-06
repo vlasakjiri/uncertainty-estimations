@@ -32,6 +32,8 @@ model = models.resnet.ResNet18(num_classes=100).to(device)
 #     num_classes=100, stem_stride=1).to(device)
 # model = models.mobilenet_v2.MobileNetV2Dropout(
 #     num_classes=100, stem_stride=1, p_dropout=0.1).to(device)
+
+
 print(model)
 
 # %%

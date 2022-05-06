@@ -12,36 +12,28 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 import utils.metrics
+import utils.mc_dropout
 import utils.model
 import utils.visualisations
 
 
 # set the name of the experiment (used to save checkpoints and log data with tensorboard)
-EXPERIMENT_NAME = "voc_segmentation_deeplab_resnet50"
+EXPERIMENT_NAME = "voc_segmentation_deeplab_resnet50-test"
 
 # setting device on GPU if available, else CPU
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
 
-def add_dropout(model, block, prob, omitted_blocks=[]):
-    for name, p in block.named_children():
-        if any(map(lambda x: isinstance(p, x), omitted_blocks)):
-            continue
-        if isinstance(p, torch.nn.Module) or isinstance(p, torch.nn.Sequential):
-            add_dropout(model, p, prob, omitted_blocks)
-
-        if isinstance(p, torch.nn.ReLU):
-            setattr(block, name, torch.nn.Sequential(
-                torch.nn.ReLU(), torch.nn.Dropout2d(p=prob)))
-
 
 model = torchvision.models.segmentation.deeplabv3_resnet50(
     pretrained=True).to(device)
 
+
 # Uncomment to add dropout layers
-# add_dropout(model.backbone.layer3, model.backbone.layer3, 0.2)
-# add_dropout(model.backbone.layer4, model.backbone.layer4, 0.2)
+# utils.mc_dropout.add_dropout(model.backbone.layer3, model.backbone.layer3, 0.2)
+# utils.mc_dropout.add_dropout(model.backbone.layer4, model.backbone.layer4, 0.2)
+
 
 print(model)
 
@@ -76,7 +68,11 @@ batchsize = 32
 
 
 data_train = torchvision.datasets.VOCSegmentation(
-    root="VOC", download=True, image_set="train", transform=transforms_normalized, target_transform=target_transforms)
+    root="VOC",
+    download=True, #set this to false after the first run
+    image_set="train", 
+    transform=transforms_normalized, 
+    target_transform=target_transforms)
 
 train_set_size = int(len(data_train) * 0.9)
 valid_set_size = len(data_train) - train_set_size

@@ -13,6 +13,14 @@ from datasets.covid19dataset import Covid19Dataset
 # choose the name of the experiment (used to save checkpoints and log data with tensorboard)
 EXPERIMENT_NAME = "unet_dropout_covid19"
 
+# standard model
+model = models.unet_model.UNet(1, 4)
+
+# dropout model
+# model = models.unet_model.UNet_Dropout(1, 4, p=0.1)
+
+
+
 # %%
 # setting device on GPU if available, else CPU
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -43,7 +51,6 @@ data_loaders = {"train": data_loader_train, "val": data_loader_test}
 # %%
 
 writer = SummaryWriter(comment=EXPERIMENT_NAME)
-model = models.unet_model.UNet(1, 4)
 print(model)
 
 optimizer = torch.optim.Adam(model.parameters())

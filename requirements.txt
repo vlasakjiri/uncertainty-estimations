@@ -9,4 +9,4 @@ torchmetrics
 torchensemble
 ipywidgets 
 tensorboard
-pycocotools
+opencv-python

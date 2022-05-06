@@ -14,7 +14,7 @@ import models.resnet_dropout
 
 # %%
 # setting device on GPU if available, else CPU
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # device = torch.device("cpu")
 print('Using device:', device)
 
@@ -65,6 +65,7 @@ data_loaders = {"train": data_loader_train,
 ensemble = VotingClassifier(
     estimator=model,               # here is your deep learning model
     n_estimators=5,                        # number of base estimators
+    cuda=device.type=="cuda"
 )
 # Set the criterion
 criterion = nn.CrossEntropyLoss()           # training objective

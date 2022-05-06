@@ -1,4 +1,5 @@
 # This script trains a SSD300 model for object detection on the voc-detection dataset.
+# taken from https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Object-Detection and modified.
 
 import time
 import torch.optim
@@ -58,7 +59,7 @@ def main():
     # Custom dataloaders
     train_dataset = PascalVOCDataset("./VOC",
                                      split='train',
-                                     download=True,
+                                    #  download=True,
                                      keep_difficult=True)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
                                                collate_fn=train_dataset.collate_fn)  # note that we're passing the collate function here
