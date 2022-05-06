@@ -1,3 +1,6 @@
+# This script trains a DeepLabV3 model with ResNet-50 backbone for segmentation on the PASCAL-VOC segmentation dataset.
+
+
 from typing import OrderedDict
 
 import numpy as np

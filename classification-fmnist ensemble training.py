@@ -1,3 +1,5 @@
+# This script trains an ensemble model for classification on the FMNIST dataset.
+
 # %%
 import torch
 import torch.nn as nn

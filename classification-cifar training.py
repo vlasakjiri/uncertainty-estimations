@@ -1,3 +1,6 @@
+# This script trains resnet-18 or mobilenetv2 model for classification on the CIFAR-100 dataset.
+
+
 # %%
 
 import torch

@@ -1,3 +1,5 @@
+# This script trains an ensemble model for classification on the CIFAR-100 dataset.
+
 # %%
 
 import torch

@@ -1,3 +1,5 @@
+# This script trains an ensemble of U-Nets for segmentation on the MedSeg Covid-19 dataset.
+
 # %%
 import torch
 import torch.nn as nn

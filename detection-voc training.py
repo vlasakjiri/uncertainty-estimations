@@ -1,3 +1,5 @@
+# This script trains a SSD300 model for object detection on the voc-detection dataset.
+
 import time
 import torch.optim
 import torch.utils.data
