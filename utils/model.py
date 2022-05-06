@@ -1,3 +1,5 @@
+# This file contains model related utilities (training, validation...)
+
 import numpy as np
 import torch
 from torch import nn
@@ -8,6 +10,7 @@ from utils.metrics import Progress, normalized_entropy
 
 
 def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, save_model_filename=None, writer=None):
+    """Trains a classification model"""
     softmax = nn.Softmax(dim=1)
     min_val_loss = 10000
     model.to(device)
@@ -65,7 +68,8 @@ def train_model(model, num_epochs, optimizer, criterion, data_loaders, device, s
                 print(f"Checkpoint with val_loss = {epoch_loss:.2f} saved.")
 
 
-def train_unet_model(model, num_epochs, optimizer, criterion, data_loaders, device, save_model_filename=None):
+def train_unet_model(model, num_epochs, optimizer, criterion, data_loaders, device, writer, save_model_filename=None):
+    """Trains a U-Net segmentation model"""
     softmax = nn.Softmax(dim=1)
     model.to(device)
     max_iou = 0
@@ -125,6 +129,7 @@ def train_unet_model(model, num_epochs, optimizer, criterion, data_loaders, devi
 
 
 def run_validation(model, data_loader, test_progress: Progress, device, mc_dropout_iters=0):
+    """Validates classification model"""
     softmax = nn.Softmax(dim=1)
     progress_bar = tqdm(data_loader)
     count = 0
@@ -143,8 +148,6 @@ def run_validation(model, data_loader, test_progress: Progress, device, mc_dropo
         if mc_dropout_iters > 0:
             mc_means, mc_vars = utils.mc_dropout.mc_dropout(
                 model, inputs, logits.shape[-1:], T=mc_dropout_iters)
-            # batch_nll = - utils.mc_dropout.compute_log_likelihood(
-            #     mc_means, torch.nn.functional.one_hot(labels, num_classes=mc_means.shape[-1]), torch.sqrt(mc_vars))
             batch_nll = torch.tensor([0])
             test_progress.update_mcd(mc_means, mc_vars, batch_nll)
 
@@ -161,16 +164,8 @@ def run_validation(model, data_loader, test_progress: Progress, device, mc_dropo
     return test_progress
 
 
-def get_number_of_classes(model):
-    last = list(model.children())[-1]
-    try:
-        last_ftrs = last.out_features
-        return last_ftrs
-    except AttributeError:
-        return get_number_of_classes(last)
-
-
 def compute_segmentation_loss_weights(dataset: dict, num_classes):
+    """Computes weights for classes in the given dataset. Weights are defined as sqrt(total count of pixels / count of pixels for the class)"""
     counts = np.zeros(num_classes, dtype="int64")
     for _, gt in dataset:
         for i in range(num_classes):

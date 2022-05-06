@@ -1,7 +1,9 @@
+# utilities for monte Carlo Dropout
+
 from typing import OrderedDict
 import torch
 
-import utils.model
+# taken from https://github.com/mattiasegu/uncertainty_estimation_deep_learning
 
 
 def set_training_mode_for_dropout(model, training=True):
@@ -18,6 +20,7 @@ def set_training_mode_for_dropout(model, training=True):
 
 
 def set_dropout_p(model, block, prob, omitted_blocks=[]):
+    """Set dropout probability for dropout and dropout2d layers"""
     for name, p in block.named_children():
         if any(map(lambda x: isinstance(p, x), omitted_blocks)):
             continue
@@ -32,7 +35,7 @@ def set_dropout_p(model, block, prob, omitted_blocks=[]):
 
 
 def mc_dropout(model, X, output_shape, T=40):
-    # output_shape = utils.model.get_number_of_classes(model)
+    """Perform Monte Carlo Dropout sampling"""
     model.eval()
     set_training_mode_for_dropout(model)
     out = torch.zeros(T, X.shape[0], *output_shape)
@@ -51,7 +54,7 @@ def mc_dropout(model, X, output_shape, T=40):
 
 
 def add_dropout(model, block, prob, add_after=torch.nn.ReLU, dropout_cls=torch.nn.Dropout2d, omitted_blocks=[]):
-
+    """Add dropout layers after specified layer"""
     for name, p in block.named_children():
         if any(map(lambda x: isinstance(p, x), omitted_blocks)):
             continue

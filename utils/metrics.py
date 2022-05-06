@@ -1,3 +1,5 @@
+# Classification and segmentation metrics
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -6,6 +8,8 @@ import sklearn.metrics
 
 
 class model_metrics:
+    """Hold model metrics when evaluating on transformed datasets"""
+
     def __init__(self) -> None:
         self.acc = []
         self.ece = []
@@ -22,6 +26,7 @@ class model_metrics:
 
 
 def compute_model_stats(correct, max_probs, label):
+    """Compute ROC and PR curves with their AUCs."""
     fpr, tpr, _ = sklearn.metrics.roc_curve(correct, max_probs)
     roc_auc = sklearn.metrics.auc(fpr, tpr)
 
@@ -41,6 +46,7 @@ def compute_model_stats(correct, max_probs, label):
 
 
 def update_model_metrics(probs, max_probs, predictions, labels, bins, m: model_metrics(), strength):
+    """Update model metrics when evauluating on datasets with increasing dataset shift."""
     accs, errors, counts = compute_calibration_metrics(
         predictions, labels, max_probs, np.argsort(max_probs), bins)
     ece = np.average(errors, weights=counts) * 100
@@ -63,6 +69,8 @@ def update_model_metrics(probs, max_probs, predictions, labels, bins, m: model_m
 
 
 class Progress:
+    """Holds classification and segmentation results when validating"""
+
     def __init__(self) -> None:
         self.logits = []
         self.probs = []
@@ -77,6 +85,7 @@ class Progress:
         self.dropout_max_probs = np.array([])
 
     def update(self, preds, labels, probs, logits):
+        """Update the results with new predictions"""
         self.logits.append(logits.numpy())
         self.probs.append(probs.numpy())
         self.predictions.append(preds.numpy())
@@ -88,6 +97,7 @@ class Progress:
                                      1 - normalized_entropy(probs.detach().numpy(), axis=1))
 
     def update_mcd(self, mc_means, mc_var, nll):
+        """Update the mcd results with new predictions"""
         mc_predictions = mc_means.argmax(axis=-1)
         self.dropout_nlls.append(nll.numpy())
         self.dropout_outputs.append(mc_means.numpy())
@@ -97,10 +107,6 @@ class Progress:
             self.dropout_predictions, mc_predictions)
         self.dropout_variances = np.append(
             self.dropout_variances, mc_var)
-
-
-def __repr__(self) -> str:
-    return f"Predictions: {self.predictions}\nLabels: {self.labels}\nMax probs: {self.max_probs}\n Confidences: {self.confidences}"
 
 
 def normalized_entropy(probs, **kwargs):
@@ -118,7 +124,9 @@ def roc_stat(labels, predictions, step=10):
 
 
 def compute_brier_score_avg(y_pred, y_true):
-    """Brier score implementation follows
+    """
+    Taken from https://github.com/mattiasegu/uncertainty_estimation_deep_learning
+    Brier score implementation follows
     https://papers.nips.cc/paper/7219-simple-and-scalable-predictive-uncertainty-estimation-using-deep-ensembles.pdf.
     The lower the Brier score is for a set of predictions, the better the predictions are calibrated."""
 
@@ -127,6 +135,7 @@ def compute_brier_score_avg(y_pred, y_true):
 
 
 def compute_calibration_metrics(predictions, labels, confidences, idx, bins):
+    """Compute mean accuracies and calibration errors for classification and segmentation models."""
     accs = []
     errors = []
     counts = []
@@ -149,6 +158,7 @@ def compute_calibration_metrics(predictions, labels, confidences, idx, bins):
 
 
 def iou(preds, labels, num_classes):
+    """Compute pixelwise IOU of foreground classes"""
     preds = F.one_hot(preds, num_classes)[..., 1:]
     labels = F.one_hot(labels, num_classes)[..., 1:]
     intersection = (preds & labels).sum()
@@ -159,6 +169,7 @@ def iou(preds, labels, num_classes):
 
 
 def mean_class_iou(preds, labels, num_classes):
+    """Compute mean class IOU"""
     preds = F.one_hot(preds, num_classes)
     labels = F.one_hot(labels, num_classes)
     intersection = (preds & labels).sum((0, 1, 2))

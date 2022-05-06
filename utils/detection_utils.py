@@ -1,3 +1,6 @@
+# Detection utilities, this file was taken from https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Object-Detection
+
+
 import json
 import os
 import torch

@@ -51,4 +51,4 @@ weights = torch.tensor(
     utils.model.compute_segmentation_loss_weights(data_train, 4), dtype=torch.float)
 criterion = nn.CrossEntropyLoss(weights).to(device)
 train_progress = utils.model.train_unet_model(
-    model, 200, optimizer, criterion, data_loaders, device, f"checkpoints/{EXPERIMENT_NAME}.pt")
+    model, 200, optimizer, criterion, data_loaders, device, writer, f"checkpoints/{EXPERIMENT_NAME}.pt")
