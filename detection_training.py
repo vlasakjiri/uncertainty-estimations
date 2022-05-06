@@ -1,253 +1,147 @@
-# %%
-from pickletools import optimize
-import pprint
-from typing import OrderedDict
-
-import numpy as np
-import sklearn.metrics as metrics
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torchmetrics
-import torchvision.datasets
-import torchvision.transforms as transforms
-from matplotlib import pyplot as plt
-from torch.utils.tensorboard import SummaryWriter
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from tqdm import tqdm
-
-import models.resnet
-import models.resnet_dropout
-import models.unet_model
-import utils.detection_metrics
-import utils.metrics
-import utils.model
-import utils.visualisations
-from utils.temperature_scaling import ModelWithTemperature
-
-# %%
-EXPERIMENT_NAME = "ssd_from_scratch"
+import time
+import torch.optim
+import torch.utils.data
+from models.ssd_300 import SSD300, MultiBoxLoss
+from datasets.voc_detection_dataset import PascalVOCDataset
+from utils.detection_utils import *
 
 
-# setting device on GPU if available, else CPU
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-# device = torch.device("cpu")
-print('Using device:', device)
-print()
+# Model parameters
+# Not too many here since the SSD300 has a very specific structure
+n_classes = len(label_map)  # number of different types of objects
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Additional Info when using cuda
-if device.type == 'cuda':
-    print(torch.cuda.get_device_name(0))
-    print('Memory Usage:')
-    print('Allocated:', round(torch.cuda.memory_allocated(0)/1024**3, 1), 'GB')
-    print('Cached:   ', round(torch.cuda.memory_reserved(0)/1024**3, 1), 'GB')
-
-# %%
-VOC_CLASSES = [
-    "background",
-    "aeroplane",
-    "bicycle",
-    "bird",
-    "boat",
-    "bottle",
-    "bus",
-    "car",
-    "cat",
-    "chair",
-    "cow",
-    "diningtable",
-    "dog",
-    "horse",
-    "motorbike",
-    "person",
-    "pottedplant",
-    "sheep",
-    "sofa",
-    "train",
-    "tvmonitor",
-]
-
-VOC_DICT = {cls: i for i, cls in enumerate(VOC_CLASSES)}
+# Learning parameters
+batch_size = 8  # batch size
+iterations = 120000  # number of iterations to train
+print_freq = 200  # print training status every __ batches
+lr = 1e-3  # learning rate
+# decay learning rate after these many iterations
+decay_lr_at = [80000, 100000]
+decay_lr_to = 0.1  # decay learning rate to this fraction of the existing learning rate
+momentum = 0.9  # momentum
+weight_decay = 5e-4  # weight decay
 
 
-class VOCTransform(object):
-    """Convert ndarrays in sample to Tensors."""
+def main():
+    """
+    Training.
+    """
+    global start_epoch, label_map, epoch, decay_lr_at
 
-    def __call__(self, label):
-        annotation = label["annotation"]
-        id = int(annotation["filename"].replace(".jpg", "").replace("_", ""))
-        out = {
-            "boxes": [],
-            "labels": [],
-            "image_id": torch.tensor(id, dtype=torch.int64),
-            "area": [],
-            "iscrowd": []
-        }
-        for obj in annotation["object"]:
-            box_dict = obj["bndbox"]
-            box = [float(box_dict["xmin"]), float(box_dict["ymin"]),
-                   float(box_dict["xmax"]), float(box_dict["ymax"])]
-            out["boxes"].append(box)
-            out["labels"].append(VOC_DICT[obj["name"]])
-            out["area"].append((box[2]-box[0]) * (box[3] - box[1]))
-            out["iscrowd"].append(0)
-        out["boxes"] = torch.as_tensor(out["boxes"], dtype=torch.float)
-        out["labels"] = torch.as_tensor(out["labels"], dtype=torch.int64)
-        out["area"] = torch.as_tensor(out["area"], dtype=torch.float)
-        out["iscrowd"] = torch.as_tensor(out["iscrowd"], dtype=torch.uint8)
-        return out
+    start_epoch = 0
+    model = SSD300(n_classes=n_classes)
+    # Adding dropout layers, uncomment if you want to add dropout
+    model.base.conv6 = torch.nn.Sequential(
+        model.base.conv6, torch.nn.Dropout2d(p=0.3))
+    model.base.conv7 = torch.nn.Sequential(
+        model.base.conv7, torch.nn.Dropout2d(p=0.3))
 
-
-def collate_fn(batch):
-    return list(zip(*batch))
-
-
-transforms_train = torchvision.transforms.Compose([
-    torchvision.transforms.ToTensor(),
-    torchvision.transforms.RandomHorizontalFlip()
-])
-
-
-target_transforms = torchvision.transforms.Compose([
-    VOCTransform()
-])
-
-
-data_train = torchvision.datasets.VOCDetection(
-    root="VOC", download=True, image_set="train", transform=transforms_train, target_transform=VOCTransform())
-data_loader_train = torch.utils.data.DataLoader(data_train,
-                                                batch_size=8,
-                                                shuffle=True,
-                                                collate_fn=collate_fn)
-
-
-data_test = torchvision.datasets.VOCDetection(
-    root="VOC", download=True, image_set="val", transform=torchvision.transforms.ToTensor(), target_transform=VOCTransform())
-data_loader_test = torch.utils.data.DataLoader(data_test,
-                                               batch_size=16,
-                                               shuffle=False,
-                                               collate_fn=collate_fn)
-
-# dataset_sizes = {"train": len(data_train), "val": len(data_test)}
-# data_loaders = {"train": data_loader_train, "val": data_loader_test}
-
-
-# %%
-model = torchvision.models.detection.ssd300_vgg16(
-    pretrained=False, pretrained_backbone=True, num_classes=len(VOC_CLASSES))
-
-# model.head = torchvision.models.detection.ssd.SSDHead(
-#     [512, 1024, 512, 256, 256, 256], [4, 6, 6, 6, 4, 4], 21)
-# model = torchvision.models.detection.fasterrcnn_mobilenet_v3_large_fpn(
-#     pretrained=True, trainable_backbone_layers=0)
-# num_classes = len(VOC_CLASSES)
-# in_features = model.roi_heads.box_predictor.cls_score.in_features
-# model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-
-
-# model.roi_heads.box_predictor.cls_score = torch.nn.Sequential(torch.nn.Dropout(p=.5),
-#                                                               model.roi_heads.box_predictor.cls_score)
-
-# model.roi_heads.box_predictor.bbox_pred = torch.nn.Sequential(torch.nn.Dropout(p=.5),
-#                                                               model.roi_heads.box_predictor.bbox_pred)
-
-# model.roi_heads.box_head.fc6 = torch.nn.Sequential(
-#     # model.roi_heads.box_head.fc6, torch.nn.Dropout(p=.2))
-# model.roi_heads.box_head.fc7 = torch.nn.Sequential(
-#     model.roi_heads.box_head.fc7, torch.nn.Dropout(p=.2))
-
-# model.backbone.fpn.layer_blocks[1] = torch.nn.Sequential(
-#     model.backbone.fpn.layer_blocks[1], torch.nn.Dropout2d(p=1))
-
-model.to(device)
-# model = torch.nn.parallel.DataParallel(model, device_ids=[0, 1])
-# %%
-print(model)
-
-# %%
-writer = SummaryWriter(comment=EXPERIMENT_NAME)
-
-
-def bbox_dict_to_tensor(pred: dict):
-    if "scores" not in pred:
-        pred["scores"] = torch.ones_like(pred["labels"])
-    return torch.cat((pred["labels"].unsqueeze(1), pred["scores"].unsqueeze(
-        1), pred["boxes"]), 1).tolist()
-
-
-def train_model(model, num_epochs, optimizer, data_loaders, device, save_model_filename=None):
-    max_ap = 0
-    for epoch in range(num_epochs):
-        print(f'Epoch {epoch+1}/{num_epochs}', flush=True)
-        print('-' * 10, flush=True)
-        for phase in ["train", 'val']:
-            if phase == 'train':
-                model.train()  # Set model to training mode
+    # Initialize the optimizer, with twice the default learning rate for biases, as in the original Caffe repo
+    biases = list()
+    not_biases = list()
+    for param_name, param in model.named_parameters():
+        if param.requires_grad:
+            if param_name.endswith('.bias'):
+                biases.append(param)
             else:
-                model.eval()
-            progress_bar = tqdm(data_loaders[phase])
-            all_pred_boxes = []
-            all_true_boxes = []
-            train_idx = 0
-            epoch_losses = []
-            for images, targets in progress_bar:
-                images = [image.to(device) for image in images]
-                targets = [{k: v.to(device) for k, v in t.items()}
-                           for t in targets]
+                not_biases.append(param)
+    optimizer = torch.optim.SGD(params=[{'params': biases, 'lr': 2 * lr}, {'params': not_biases}],
+                                lr=lr, momentum=momentum, weight_decay=weight_decay)
 
-                if phase == 'train':
-                    with torch.enable_grad():
-                        optimizer.zero_grad()
-                        loss_dict = model(images, targets)
-                        loss = sum(loss for loss in loss_dict.values())
-                        loss.backward()
-                        optimizer.step()
-                    epoch_losses.append(loss.item())
-                    progress_str = f'{phase} Loss: {np.mean(epoch_losses):.2f}'
-                    progress_bar.set_description(progress_str)
-                else:
-                    with torch.no_grad():
-                        out = model(images)
-                    for idx, pred in enumerate(out):
-                        bboxes = bbox_dict_to_tensor(pred)
-                        true_bboxes = bbox_dict_to_tensor(targets[idx])
-                        # nms_boxes = utils.detection_metrics.nms(
-                        #     bboxes,
-                        #     iou_threshold=0.5,
-                        #     threshold=0.5,
-                        # )
+    # Move to default device
+    model = model.to(device)
+    criterion = MultiBoxLoss(priors_cxcy=model.priors_cxcy).to(device)
 
-                        for nms_box in bboxes:
-                            all_pred_boxes.append([train_idx] + nms_box)
+    # Custom dataloaders
+    train_dataset = PascalVOCDataset("./VOC",
+                                     split='train',
+                                     download=True,
+                                     keep_difficult=True)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True,
+                                               collate_fn=train_dataset.collate_fn)  # note that we're passing the collate function here
 
-                        for box in true_bboxes:
-                            # many will get converted to 0 pred
-                            # if box[1] > threshold:
-                            all_true_boxes.append([train_idx] + box)
-                        train_idx += 1
-            if phase == "val":
-                AP_50 = utils.detection_metrics.mean_average_precision(
-                    all_pred_boxes, all_true_boxes, iou_threshold=0.5, num_classes=21)
-                AP_75 = utils.detection_metrics.mean_average_precision(
-                    all_pred_boxes, all_true_boxes, iou_threshold=0.75, num_classes=21)
-                print(f'{phase} AP 50: {AP_50:.2f} AP 75: {AP_75:.2f}')
-                writer.add_scalar(f"AP 50", AP_50, epoch)
-                writer.add_scalar(f"AP 75", AP_75, epoch)
+    # Calculate total number of epochs to train and the epochs to decay learning rate at (i.e. convert iterations to epochs)
+    # To convert iterations to epochs, divide iterations by the number of iterations per epoch
+    # The paper trains for 120,000 iterations with a batch size of 32, decays after 80,000 and 100,000 iterations
+    epochs = iterations // (len(train_dataset) // 32)
+    decay_lr_at = [it // (len(train_dataset) // 32) for it in decay_lr_at]
 
-                if AP_50 > max_ap and save_model_filename is not None:
-                    max_ap = AP_50
-                    torch.save(model, save_model_filename)
-                    print(
-                        f"Checkpoint with AP = {AP_50:.2f} saved.")
-            else:
-                writer.add_scalar(f"Train loss", np.mean(epoch_losses), epoch)
+    # Epochs
+    for epoch in range(start_epoch, epochs):
+
+        # Decay learning rate at particular epochs
+        if epoch in decay_lr_at:
+            adjust_learning_rate(optimizer, decay_lr_to)
+
+        # One epoch's training
+        train(train_loader=train_loader,
+              model=model,
+              criterion=criterion,
+              optimizer=optimizer,
+              epoch=epoch)
+
+        # Save checkpoint
+        save_checkpoint(epoch, model, optimizer)
 
 
-params = [p for p in model.parameters() if p.requires_grad]
-# optimizer = torch.optim.Adam(model.roi_heads.box_predictor.parameters())
-# optimizer = torch.optim.SGD(params, 5e-4, 0.9, 5e-4)
-optimizer = torch.optim.Adam(params)
-train_progress = train_model(
-    model, 150, optimizer, {"train": data_loader_train, "val": data_loader_test}, device, f"checkpoints/{EXPERIMENT_NAME}.pt")
+def train(train_loader, model, criterion, optimizer, epoch):
+    """
+    One epoch's training.
+    :param train_loader: DataLoader for training data
+    :param model: model
+    :param criterion: MultiBox loss
+    :param optimizer: optimizer
+    :param epoch: epoch number
+    """
+    model.train()  # training mode enables dropout
 
-# %%
+    batch_time = AverageMeter()  # forward prop. + back prop. time
+    data_time = AverageMeter()  # data loading time
+    losses = AverageMeter()  # loss
+
+    start = time.time()
+
+    # Batches
+    for i, (images, boxes, labels, _) in enumerate(train_loader):
+        data_time.update(time.time() - start)
+
+        # Move to default device
+        images = images.to(device)  # (batch_size (N), 3, 300, 300)
+        boxes = [b.to(device) for b in boxes]
+        labels = [l.to(device) for l in labels]
+
+        # Forward prop.
+        predicted_locs, predicted_scores = model(
+            images)  # (N, 8732, 4), (N, 8732, n_classes)
+
+        # Loss
+        loss = criterion(predicted_locs, predicted_scores,
+                         boxes, labels)  # scalar
+
+        # Backward prop.
+        optimizer.zero_grad()
+        loss.backward()
+
+        # Update model
+        optimizer.step()
+
+        losses.update(loss.item(), images.size(0))
+        batch_time.update(time.time() - start)
+
+        start = time.time()
+
+        # Print status
+        if i % print_freq == 0:
+            print('Epoch: [{0}][{1}/{2}]\t'
+                  'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                  'Data Time {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(epoch, i, len(train_loader),
+                                                                  batch_time=batch_time,
+                                                                  data_time=data_time, loss=losses))
+    # free some memory since their histories may be stored
+    del predicted_locs, predicted_scores, images, boxes, labels
+
+
+if __name__ == '__main__':
+    main()
