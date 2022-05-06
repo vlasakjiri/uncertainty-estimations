@@ -10,3 +10,4 @@ torchensemble
 ipywidgets 
 tensorboard
 opencv-python
+pandas
