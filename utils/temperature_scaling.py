@@ -1,8 +1,10 @@
+# Temperature scale a model
+# Taken from https://github.com/gpleiss/temperature_scaling and modified.
+
 from typing import OrderedDict
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
-from zmq import device
 
 
 class ModelWithTemperature(nn.Module):

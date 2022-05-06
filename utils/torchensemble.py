@@ -1,4 +1,5 @@
 # Fix for the torchensemble module when loading cuda saved file on cpu
+# Original file taken from https://github.com/TorchEnsemble-Community/Ensemble-Pytorch
 
 import torch
 import os
