@@ -2,6 +2,8 @@
 
 This repository provides the code used in my bachelor`s thesis "Assessment of Uncertainty of Neural Net Predictions in the Tasks of Classification, Detection and Segmentation".
 
+You can watch the presentational video: https://youtu.be/rt9T6uYYrIQ
+
 ## Installation
 with conda:
 ```
@@ -24,10 +26,9 @@ The ``figures`` folder contains all of the figures used in the paper.
 
 The ``experiments`` folder contains exported results of evaluation on shifted datasets.
 
-The ``checkpoints`` folder contains checkpoints of the trained models. To load them, use 
-```python
-torch.load("checkpoints/NAME OF THE MODEL")
-```
+## Pre-trained models
+Download the pre-trained models from https://drive.google.com/drive/folders/1Uzw0pO-NPe6l5SGLFjZEqQRggZMfMFAl?usp=sharing
+and place them in the ``checkpoints`` folder.
 
 
 ## Training
