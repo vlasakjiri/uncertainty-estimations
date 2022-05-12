@@ -29,8 +29,6 @@ The ``checkpoints`` folder contains checkpoints of the trained models. To load t
 torch.load("checkpoints/NAME OF THE MODEL")
 ```
 
-The ``cifar100``, ``covid19`` and ``fmnist`` folders contain the respective datasets used for training and evaluation. The PASCAL-VOC dataset will be downloaded automatically when running the training or evaluation scripts for the first time.
-
 
 ## Training
 The training scripts are .py files named by the dataset used. 
